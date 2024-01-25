@@ -2,7 +2,7 @@ use std::cmp::min;
 use crate::linalg::matrix::Matrix;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, AddAssign, Sub, Mul, Div, Index, IndexMut, SubAssign};
-use crate::linalg::Num;
+use crate::{Float, Num};
 
 
 #[macro_export]
@@ -25,7 +25,26 @@ macro_rules! vector_element_type_def {
 	};
 }
 
-vector_element_type_def!(i16, i32, i64, i128, u8, u16, u32, u128, f32, f64);
+vector_element_type_def!(i16, i32, i64, i128, f32, f64);
+
+
+/// Vector definition
+///
+///# Example
+///```
+/// use tensors::vector;
+/// let a = vector![1, 2, 3];
+/// ```
+#[macro_export]
+macro_rules! vector {
+    ($($x:expr),*) => {
+		Vector::from(
+			vec![
+				$($x,)*
+			]
+		)
+	};
+}
 
 /// Mathematical vector.
 ///
@@ -71,7 +90,7 @@ impl<T: Num> Vector<T>{
 	/// let b = Vector::from(vec![1, 2, 3]);
 	/// let c = a.scalar(&b);//{1*1 2*2 3*3}
 	/// ```
-	pub fn scalar(self, other: &Vector<T>) -> T{
+	pub fn scalar(&self, other: &Vector<T>) -> T{
 		let mut output = T::default();
 		for i in 0..min(self.data.len(), other.data.len()){
 			output += self[i].clone() * other[i].clone();
@@ -121,6 +140,16 @@ impl<T: Num> Vector<T>{
 			length: new_length,
 		}
 	}
+
+
+	/// Sum of all values of vector
+	pub fn sum(self) -> T{
+		let mut sum = T::default();
+		for i in self.data{
+			sum += i.clone();
+		}
+		sum
+	}
 }
 
 impl<T:Num> Index<usize> for Vector<T>{
@@ -141,6 +170,49 @@ impl<T:Num> IndexMut<usize> for Vector<T> {
 		}
 		&mut self.data[index]
 	}
+}
+
+impl<T:Float> Vector<T>{
+
+	/// Finds lengths of vector
+    ///
+	/// sqrt(x_1^2 + ... + x_n^2)
+	/// # Example
+	///
+	/// ```
+	/// use tensors::linalg::Vector;
+	/// let a = Vector::from(vec![4.0, 3.0]);
+	/// println!("{}", a.length());
+	/// //5
+	/// ```
+	pub fn length(self) -> T{
+		let mut ans = T::default();
+		for i in self{
+			ans += i*i;
+		}
+		ans.sqrt()
+	}
+
+	/// Finds an exp of all elements of vector
+	///
+	/// Formula: exp(x_i)
+	///
+	/// # Example
+	/// ```
+	/// use tensors::vector;
+	/// let a = vector![1.0, 0.0];
+	///
+	/// println!("{}", a);
+	/// //{e, 1}
+	/// ```
+	pub fn exp(self) -> Vector<T>{
+		let mut ans = Vec::with_capacity(self.length);
+		for i in self{
+			ans.push(i.exp());
+		}
+		Vector::from(ans)
+	}
+
 }
 
 impl<T: Num> Add<Vector<T>> for Vector<T> {
@@ -316,10 +388,38 @@ mod tests{
 	use super::*;
 
 	#[test]
+	fn macros_test(){
+		let a = vector![1, 2, 4];
+		println!("{}", a);
+
+	}
+
+	#[test]
 	fn display_test(){
 		let a = Vector::from_num(-1, 3);
 		let b = Vector::from(vec![-1,-1,-1]);
 		assert_eq!(a, b);
+	}
+
+	#[test]
+	fn simple_vector_task(){
+		let vector_a = vector![0.0, -1.0];
+		let vector_b = vector![0.0, 1.0];
+
+		let scalar = vector_a.scalar(&vector_b);
+		let prod_len = vector_a.length() * vector_b.length();
+
+		let cos_a = (scalar/prod_len) as f32;
+		println!("{}", cos_a.acos());
+	}
+
+	#[test]
+	fn another_task(){
+		let a = vector![-3.0+7.0, 3.0-6.0];
+		let b = vector![2.0-2.0, 5.0-1.0];
+		let c = vector![-4.0-4.0, -2.0+4.0];
+		let d= a+b+c;
+		assert_eq!(5.0, d.length());
 	}
 
 	#[test]
@@ -333,7 +433,7 @@ mod tests{
 	#[should_panic]
 	fn err_from_matrix(){
 		let a = Matrix::from_num(10, 2, 2);
-		let a = Vector::from(a);
+		let _a = Vector::from(a);
 	}
 
 	#[test]
@@ -379,13 +479,9 @@ mod tests{
 
     #[test]
     fn len_vector(){
-        let a = Vector::from(vec![4,3]);
-		let mut l = 0f64;
-		for i in a{
-			l += (i*i) as f64
-		}
+        let a = Vector::from(vec![4.0,3.0]);
 
-        assert_eq!(l.sqrt(), 5f64);
+        assert_eq!(a.length(), 5f64);
     }
 
 	#[test]
@@ -434,6 +530,12 @@ mod tests{
 		a = a * 0;
 
 		assert_eq!(Vector::from(vec![0,0,0]), a);
+	}
+
+	#[test]
+	fn exp_test(){
+		let a = vector![1.0, 0.0];
+		println!("{}", a.exp())
 	}
 
 

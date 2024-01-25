@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
-use crate::linalg::{Num, Vector};
+use crate::linalg::Vector;
+use crate::{Float, Num};
 
 // this is unreadable
 /// Matrix definition
@@ -33,9 +34,9 @@ macro_rules! matrix {
 ///reference by (skyl4b)<https://github.com/TheAlgorithms/Rust/blob/master/src/math/matrix_ops.rs>
 #[derive(PartialEq, Eq, Debug)]
 pub struct Matrix<T:Num>{
-    data: Vec<T>,
-    rows: usize,
-    cols: usize,
+    pub(crate) data: Vec<T>,
+    pub(crate) rows: usize,
+    pub(crate) cols: usize,
 }
 
 impl<T:Num> Matrix<T> {
@@ -103,6 +104,20 @@ impl<T:Num> Matrix<T> {
             cols,
         }
     }
+    
+    ///Return data from matrix
+    /// 
+    /// # Example
+    /// 
+    ///```
+    /// use tensors::linalg::Matrix;
+    /// let a = Matrix::from_num(10, 2, 1);
+    /// let a = a.get_data();
+    /// // shoould return vec![10, 10]
+    /// ```
+    pub fn get_data(&self) -> Vec<T>{
+        self.data.clone()
+    }
 
     /// Returns row count
     pub fn row(&self) -> usize{
@@ -112,6 +127,14 @@ impl<T:Num> Matrix<T> {
     /// Returns column count
     pub fn col(&self) -> usize{
         self.cols.clone()
+    }
+
+    pub fn sum(self) -> T{
+        let mut sum = T::default();
+        for i in self.data{
+            sum += i;
+        }
+        sum
     }
 
     /// Returns column as Vector with index (index starts with 0)
@@ -126,7 +149,7 @@ impl<T:Num> Matrix<T> {
     /// ```
     pub fn get_col(&self, index: usize) -> Vector<T> {
         if index >= self.cols {
-            panic!("!!!Index {} more then columns count {}!!!", index, self.cols);
+            panic!("!!!Index:{} more or equal then columns count:{}!!!", index, self.cols);
         }
         let mut vector = Vec::with_capacity(self.rows);
         for i in 0..self.rows{
@@ -144,11 +167,11 @@ impl<T:Num> Matrix<T> {
     /// use tensors::matrix;
     /// let example = matrix![[1,2],
     ///                     [3,4]];
-    /// let col:Vector<i32> = example.get_row(0);//[1 2]
+    /// let col:Vector<i32> = example.get_row(1);//[1 2]
     /// ```
     pub fn get_row(&self, index:usize) -> Vector<T>{
-        if index >= self.cols {
-            panic!("!!!Index {} more then rows count {}!!!", index, self.rows);
+        if index >= self.rows {
+            panic!("!!!Index:{} greater or equal then rows count:{}.!!!", index, self.rows);
         }
         let start_index = index * self.cols;
         let end_index = start_index + self.cols;
@@ -365,9 +388,87 @@ impl<T:Num> Display for Matrix<T> {
     }
 }
 
+impl<T:Float> Matrix<T> {
+    pub fn norm(self, p:T) -> T{
+        let one = 1.into();
+        if p < one{
+            panic!("!!!Number p:{} must be positive!!!", p);
+        }
+        let mut norm = T::default();
+
+        if p == one{
+            let mut max_num = self.get_col(0).sum();
+
+            for i in 1..self.cols{
+                let sum = self.get_col(i).sum();
+                max_num = if sum > max_num {
+                    sum
+                } else {
+                    max_num
+                };
+            }
+            max_num
+
+        } else {
+            for i in self.data{
+                norm += i.powf(p);
+            }
+            norm.powf(one/p)
+        }
+    }
+
+    pub fn norm_inf(self) -> T{
+        let mut max_num = self.get_row(0).sum();
+
+        for i in 1..self.rows{
+            let sum = self.get_row(i).sum();
+            max_num = if sum > max_num {
+                sum
+            } else {
+                max_num
+            };
+        }
+        max_num
+    }
+}
+/*
+impl<T:Num> Iterator for Matrix<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.data.pop()
+    }
+    
+}*/
+
 #[cfg(test)]
 mod tests{
     use crate::linalg::matrix::*;
+
+    #[test]
+    fn matrix_norm(){
+        let a = matrix![[1.0, 3.0]];
+        assert_eq!(3.0, a.norm(1.0));
+
+    }
+    #[test]
+    fn matrix_norm_inf(){
+        let a = matrix![[1.0],
+                                    [3.0]];
+        assert_eq!(3.0, a.norm_inf());
+    }
+
+    #[test]
+    fn matrix_norm_swap(){
+        let a = matrix![[1.0],
+                                    [3.0]];
+        assert_eq!(4.0, a.norm(1.0));
+    }
+
+    #[test]
+    fn matrix_norm_inf_swap(){
+        let a = matrix![[1.0, 3.0]];
+        assert_eq!(4.0, a.norm_inf());
+    }
 
     #[test]
     fn macro_test(){
@@ -380,6 +481,13 @@ mod tests{
         let a = Matrix::from_num(10, 2,2);
 
         println!("{a}");
+    }
+
+    #[test]
+    fn sum_matrix(){
+        let a = matrix![[1.0, 1.0],
+                                    [1.0, 1.0]];
+        println!("{}", a.sum());
     }
 
     #[test]
@@ -407,7 +515,6 @@ mod tests{
             [1,2,3,4]];
         let b = Vector::from_num(4, 3);
         assert_eq!(b, a.get_col(3));
-        let c = Vector::from_num(10, 2);
     }
 
     #[test]
