@@ -23,7 +23,7 @@ impl Sigmoid{
 }
 
 impl<T:Float> Function<T> for Sigmoid{
-    fn call(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);
         for i in matrix.data{
@@ -31,7 +31,7 @@ impl<T:Float> Function<T> for Sigmoid{
         }
         Matrix{ data, rows:row, cols }
     }
-    fn derivative(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);
         for i in matrix.data{

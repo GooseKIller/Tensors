@@ -81,13 +81,14 @@ impl<T:Num> Matrix<T> {
     ///
     /// # Example
     /// ```
+    /// use tensors::DataType;
     /// use tensors::linalg::Matrix;
-    /// let a:Matrix<f64> = Matrix::single(2, 2);
+    /// let a:Matrix<f64> = Matrix::single(DataType::f64(), 2, 2);
     /// // will create matrix
     /// // [1 0]
     /// // [0 1]
     /// ```
-    pub fn single(rows:usize, cols:usize) -> Self{
+    pub fn single(_: T, rows:usize, cols:usize) -> Self{
         let mut matrix = Vec::with_capacity(rows*cols);
         for i in 0..rows{
             for j in 0..cols{
@@ -202,6 +203,30 @@ impl<T:Num> Matrix<T> {
         }
         result
     }
+
+    pub fn size(&self) -> [usize; 2]{
+        [self.rows.clone(), self.cols.clone()]
+    }
+
+    pub fn add_column(&mut self, column: Vec<T>) {
+        if column.len() != self.rows{
+            panic!("!!!the length of the Vec<T> is not equal to the size of the rows of the matrix!!!")
+        }
+        for i in 0..self.rows {
+            self.data.insert((i + 1) * self.cols + i, column[i].clone());
+        }
+        self.cols += 1;
+    }
+
+    pub fn add_row(&mut self, row: Vec<T>) {
+        if row.len() != self.cols{
+            panic!("!!!the length of the Vec<T> is not equal to the size of the columns of the matrix!!!")
+        }
+        for i in row{
+            self.data.push(i)
+        }
+        self.rows += 1;
+    }
 }
 
 impl<T:Num> Index<[usize;2]> for Matrix<T> {
@@ -259,19 +284,17 @@ impl<T:Num> Add<T> for Matrix<T> {
     }
 }
 
-impl<T:Num> Sub<&Matrix<T>> for &Matrix<T>{
+impl<T:Num> Sub<Matrix<T>> for Matrix<T>{
     type Output = Matrix<T>;
-    fn sub(self, rhs: &Matrix<T>) -> Self::Output {
+    fn sub(self, rhs: Matrix<T>) -> Self::Output {
         if self.rows != rhs.rows || self.cols != rhs.cols{
             panic!("!!!Matrix dimensions do not match!!!");
         }
-        let mut result = Matrix::from_num(T::default(), self.rows, self.cols);
-        for i in 0..self.rows{
-            for j in 0..self.cols{
-                result[[i, j]] = self[[i, j]] - rhs[[i, j]];
-            }
+        let mut result = Vec::with_capacity(self.rows*self.cols);
+        for i in 0..self.rows*self.cols{
+                result.push(self.data[i] - rhs.data[i]);
         }
-        result
+        Matrix::new(result, self.rows, self.cols)
     }
 }
 
@@ -397,10 +420,10 @@ impl<T:Float> Matrix<T> {
         let mut norm = T::default();
 
         if p == one{
-            let mut max_num = self.get_col(0).sum();
+            let mut max_num = self.get_col(0).abs_sum();
 
             for i in 1..self.cols{
-                let sum = self.get_col(i).sum();
+                let sum = self.get_col(i).abs_sum();
                 max_num = if sum > max_num {
                     sum
                 } else {
@@ -418,10 +441,10 @@ impl<T:Float> Matrix<T> {
     }
 
     pub fn norm_inf(self) -> T{
-        let mut max_num = self.get_row(0).sum();
+        let mut max_num = self.get_row(0).abs_sum();
 
         for i in 1..self.rows{
-            let sum = self.get_row(i).sum();
+            let sum = self.get_row(i).abs_sum();
             max_num = if sum > max_num {
                 sum
             } else {
@@ -429,6 +452,16 @@ impl<T:Float> Matrix<T> {
             };
         }
         max_num
+    }
+}
+
+impl <T:Num> Clone for Matrix<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            rows: self.rows.clone(),
+            cols: self.cols.clone()
+        }
     }
 }
 /*
@@ -444,17 +477,74 @@ impl<T:Num> Iterator for Matrix<T> {
 mod tests{
     use crate::linalg::matrix::*;
 
+
     #[test]
-    fn matrix_norm(){
-        let a = matrix![[1.0, 3.0]];
-        assert_eq!(3.0, a.norm(1.0));
+    fn add_col(){
+        let mut a = matrix![[1,2,3],
+            [3,4,5]];
+        let column = vec![7,8];
+        a.add_column(column);
+        println!("{}", a);
+        let right = matrix![[1,2,3,7],[3,4,5,8]];
+        assert_eq!(a, right);
+    }
+
+    #[test]
+    fn add_row(){
+        let mut a = matrix![[1,2,3],
+            [4,5,6]];
+        let row = vec![7,8,9];
+        a.add_row(row);
+        let right = matrix![[1,2,3],[4,5,6],[7,8,9]];
+        println!("{}", a);
+        assert_eq!(a, right);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_col_err(){
+        let mut a = matrix![[1,2,3],
+            [3,4,5]];
+        let column = vec![7,8, 9];
+        a.add_column(column);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_row_err(){
+        let mut a = matrix![[1,2,3],
+            [4,5,6]];
+        let row = vec![7,8,9,10];
+        a.add_row(row);
+    }
+
+    #[test]
+    fn one_multi(){
+        let one = Matrix::single(1.0,3, 3);
+        let some = matrix![[1.0,2.0,3.0],
+            [4.0,5.0,6.0],
+            [7.0,8.0,9.0]];
+        let same = matrix![[1.0,2.0,3.0],
+            [4.0,5.0,6.0],
+            [7.0,8.0,9.0]];
+        assert_eq!(some * &one, same);
+
+    }
+
+    #[test]
+    fn matrix_norm_one(){
+        let a = matrix![[-3.0, 5.0, 7.0],
+                                    [2.0, 6.0, 4.0],
+                                    [0.0, 2.0, 8.0]];
+        assert_eq!(19.0, a.norm(1.0));
 
     }
     #[test]
     fn matrix_norm_inf(){
-        let a = matrix![[1.0],
-                                    [3.0]];
-        assert_eq!(3.0, a.norm_inf());
+        let a = matrix![[-3.0, 5.0, 7.0],
+                                    [2.0, 6.0, 4.0],
+                                    [0.0, 2.0, 8.0]];
+        assert_eq!(15.0, a.norm_inf());
     }
 
     #[test]
@@ -492,10 +582,9 @@ mod tests{
 
     #[test]
     fn single_matrix(){
-        let a:Matrix<f64> = Matrix::single(2, 2);
+        let a:Matrix<f64> = Matrix::single(1.0,2, 2);
         let b = matrix![[1.0,0.0],
             [0.0,1.0]];
-        println!("{}", a);
         assert_eq!(a, b);
     }
 
@@ -529,10 +618,10 @@ mod tests{
 
     #[test]
     fn transpose_matrix(){
-        let a = vec![1,2,3, 1,2,3, 1,2,3];
-        let a = Matrix::new(a, 3, 3);
+        let a = Matrix::single(1, 3, 3);
         let a = a.transpose();
-        println!("{}", a);
+        let b = Matrix::single(1, 3, 3);
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -561,6 +650,16 @@ mod tests{
         let ans = Matrix::new(vec![-1,0,0,-1],2,2);
         assert_eq!(ans, a*&a1);
 
+    }
+
+    #[test]
+    fn sub_matrix(){
+        let a = matrix![[1.0, 2.0]];
+        let b = matrix![[1.0, 2.0]];
+
+        let ans = matrix![[0.0, 0.0]];
+
+        assert_eq!(a-b, ans);
     }
 
     #[test]

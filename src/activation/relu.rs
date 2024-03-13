@@ -21,7 +21,7 @@ impl ReLU{
 }
 
 impl<T:Float> Function<T> for ReLU{
-    fn call(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);
         for i in matrix.data{
@@ -40,7 +40,7 @@ impl<T:Float> Function<T> for ReLU{
     ///if x > 0 then 1
     ///
     ///else 0
-    fn derivative(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);
         for i in matrix.data{

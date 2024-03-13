@@ -29,7 +29,7 @@ impl SoftMax{
 }
 
 impl<T:Float> Function<T> for SoftMax {
-    fn call(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let mut data:Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
         for i in 0..matrix.rows{
             let vector = matrix.get_row(i);
@@ -42,7 +42,7 @@ impl<T:Float> Function<T> for SoftMax {
 
     /// f'(x_i)= softmax(x_i) * (δ_{ij} — softmax(x_j))
     /// δ_{ij} - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
-    fn derivative(self, matrix: Matrix<T>) -> Matrix<T> {
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let softmax = self.call(matrix);
         let mut det = Matrix::from_num(T::default(), row, cols);

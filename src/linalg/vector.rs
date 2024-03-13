@@ -1,7 +1,6 @@
 use std::cmp::min;
-use crate::linalg::matrix::Matrix;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, AddAssign, Sub, Mul, Div, Index, IndexMut, SubAssign};
+use std::ops::{Add, AddAssign, Sub, Mul, Index, IndexMut, SubAssign};
 use crate::{Float, Num};
 
 
@@ -33,6 +32,7 @@ vector_element_type_def!(i16, i32, i64, i128, f32, f64);
 ///# Example
 ///```
 /// use tensors::vector;
+/// use tensors::linalg::Vector;
 /// let a = vector![1, 2, 3];
 /// ```
 #[macro_export]
@@ -150,6 +150,19 @@ impl<T: Num> Vector<T>{
 		}
 		sum
 	}
+
+	/// Sum of all absolute values of vector
+	pub fn abs_sum(self) -> T{
+		let mut sum = T::default();
+		for i in self.data{
+			if i < T::default(){
+				sum  -= i
+			} else {
+				sum += i
+			}
+		}
+		sum
+	}
 }
 
 impl<T:Num> Index<usize> for Vector<T>{
@@ -200,6 +213,7 @@ impl<T:Float> Vector<T>{
 	/// # Example
 	/// ```
 	/// use tensors::vector;
+	/// use tensors::linalg::Vector;
 	/// let a = vector![1.0, 0.0];
 	///
 	/// println!("{}", a);
@@ -373,15 +387,6 @@ impl<T:Num> Iterator for Vector<T>{
 	}
 }
 
-impl<T:Num> From<Matrix<T>> for Vector<T> {
-	fn from(value: Matrix<T>) -> Self {
-		if value.col() != 1 {
-			panic!("!!!Can't translate matrix to vector: columns are not equal 1. Column = {}!!!", value.col())
-		}
-		Vector::from(value.get_row(0))
-	}
-}
-
 
 #[cfg(test)]
 mod tests{
@@ -389,9 +394,10 @@ mod tests{
 
 	#[test]
 	fn macros_test(){
-		let a = vector![1, 2, 4];
-		println!("{}", a);
+		let a = vector![1, 2, 3];
+		let b = Vector::from(vec![1, 2, 3]);
 
+		assert_eq!(a, b)
 	}
 
 	#[test]
@@ -410,7 +416,7 @@ mod tests{
 		let prod_len = vector_a.length() * vector_b.length();
 
 		let cos_a = (scalar/prod_len) as f32;
-		println!("{}", cos_a.acos());
+		assert_eq!(std::f32::consts::PI, cos_a.acos());
 	}
 
 	#[test]
@@ -427,21 +433,6 @@ mod tests{
 		let a = Vector::from_num(1, 2);
 
 		assert_eq!(Vector::from(vec![1,1]), a);
-	}
-
-	#[test]
-	#[should_panic]
-	fn err_from_matrix(){
-		let a = Matrix::from_num(10, 2, 2);
-		let _a = Vector::from(a);
-	}
-
-	#[test]
-	fn from_matrix(){
-		let a = Matrix::from_num(10, 2, 1);
-		let a = Vector::from(a);
-		let b = Vector::from_num(10, 2);
-		assert_eq!(a, b)
 	}
 
 	#[test]
@@ -535,7 +526,13 @@ mod tests{
 	#[test]
 	fn exp_test(){
 		let a = vector![1.0, 0.0];
-		println!("{}", a.exp())
+		assert_eq!(vector![1.0, std::f64::consts::E], a.exp());
+	}
+
+	#[test]
+	fn abs_sum(){
+		let a = vector![-3.0, 5.0, 7.0];
+		assert_eq!(15.0, a.abs_sum());
 	}
 
 

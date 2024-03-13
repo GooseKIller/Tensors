@@ -15,10 +15,16 @@
 mod relu;
 mod softmax;
 mod sigmoid;
+mod leaky_relu;
+mod elu;
+mod selu;
 
 pub use relu::*;
 pub use softmax::*;
 pub use sigmoid::*;
+pub use leaky_relu::*;
+pub use elu::*;
+pub use selu::*;
 
 use crate::linalg::Matrix;
 use crate::Float;
@@ -31,8 +37,8 @@ pub trait Function<T: Float>{
     /// Rust does not have similar thing like \_\_call__ in Python
     ///
     /// So just use method call
-    fn call(self, matrix: Matrix<T>) -> Matrix<T>;
+    fn call(&self, matrix: Matrix<T>) -> Matrix<T>;
 
     /// Derivative for Function
-    fn derivative(self, matrix: Matrix<T>) -> Matrix<T>;
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T>;
 }
