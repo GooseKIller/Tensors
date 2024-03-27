@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, AddAssign, Sub, Mul, Index, IndexMut, SubAssign};
+use std::ops::{Add, AddAssign, Sub, Mul, Index, IndexMut, SubAssign, MulAssign};
 use crate::{Float, Num};
 
 
@@ -229,10 +229,9 @@ impl<T:Float> Vector<T>{
 
 }
 
-impl<T: Num> Add<Vector<T>> for Vector<T> {
+impl<T:Num> Add<Vector<T>> for Vector<T>{
 	type Output = Vector<T>;
-
-	fn add(self, rhs: Self) -> Self::Output {
+	fn add(self, rhs: Vector<T>) -> Self::Output {
 		if self.length != rhs.length {
 			panic!("!!!Different size of vectors!!!")
 		}
@@ -241,6 +240,42 @@ impl<T: Num> Add<Vector<T>> for Vector<T> {
 			vec[i] = self[i] + rhs[i];
 		}
 		Vector::from(vec)
+	}
+}
+
+impl<T: Num> Add<&Vector<T>> for Vector<T> {
+	type Output = Vector<T>;
+
+	fn add(self, rhs: &Vector<T>) -> Self::Output {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		let mut vec = vec![T::default(); self.length];
+		for i in 0..self.length{
+			vec[i] = self[i] + rhs[i];
+		}
+		Vector::from(vec)
+	}
+}
+
+impl<T:Num> AddAssign<Vector<T>> for Vector<T>{
+	fn add_assign(&mut self, rhs: Vector<T>) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		for i in 0..self.length{
+			self[i] += rhs[i];
+		}
+	}
+}
+impl<T:Num> AddAssign<&Vector<T>> for Vector<T>{
+	fn add_assign(&mut self, rhs: &Vector<T>) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		for i in 0..self.length{
+			self[i] += rhs[i];
+		}
 	}
 }
 
@@ -255,10 +290,18 @@ impl<T:Num> Add<T> for Vector<T>{
 	}
 }
 
+impl<T:Num> AddAssign<T> for Vector<T>{
+	fn add_assign(&mut self, rhs: T) {
+		for i in 0..self.length{
+			self[i] += rhs;
+		}
+	}
+}
+
 impl<T:Num> Sub<Vector<T>> for Vector<T> {
 	type Output = Vector<T>;
 
-	fn sub(self, rhs: Self) -> Self::Output {
+	fn sub(self, rhs: Vector<T>) -> Self::Output {
 		if self.length != rhs.length {
 			panic!("!!!Different size of vectors!!!")
 		}
@@ -267,6 +310,40 @@ impl<T:Num> Sub<Vector<T>> for Vector<T> {
 			vec[i] = self[i] - rhs[i];
 		}
 		Vector::from(vec)
+	}
+}
+impl<T:Num> Sub<&Vector<T>> for Vector<T> {
+	type Output = Vector<T>;
+
+	fn sub(self, rhs: &Vector<T>) -> Self::Output {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		let mut vec = vec![T::default(); self.length];
+		for i in 0..self.length{
+			vec[i] = self[i] - rhs[i];
+		}
+		Vector::from(vec)
+	}
+}
+impl<T:Num> SubAssign<Vector<T>> for Vector<T>{
+	fn sub_assign(&mut self, rhs: Self) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		for i in 0..self.length{
+			self[i] -= rhs[i];
+		}
+	}
+}
+impl<T:Num> SubAssign<&Vector<T>> for Vector<T>{
+	fn sub_assign(&mut self, rhs: &Vector<T>) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+		for i in 0..self.length{
+			self[i] -= rhs[i];
+		}
 	}
 }
 
@@ -281,38 +358,6 @@ impl<T:Num> Sub<T> for Vector<T> {
 		Vector::from(vec)
 	}
 }
-
-impl<T: Num> AddAssign<Vector<T>> for Vector<T>{
-	fn add_assign(&mut self, rhs: Self) {
-		if self.length != rhs.length {
-			panic!("!!!Different size of vectors!!!")
-		}
-		for i in 0..self.length{
-			self[i] += rhs[i];
-		}
-
-	}
-}
-
-impl<T:Num> AddAssign<T> for Vector<T>{
-	fn add_assign(&mut self, rhs: T) {
-		for i in 0..self.length{
-			self[i] += rhs;
-		}
-	}
-}
-
-impl<T:Num> SubAssign<Vector<T>> for Vector<T>{
-	fn sub_assign(&mut self, rhs: Self) {
-		if self.length != rhs.length {
-			panic!("!!!Different size of vectors!!!")
-		}
-		for i in 0..self.length{
-			self[i] -= rhs[i];
-		}
-	}
-}
-
 impl<T:Num> SubAssign<T> for Vector<T>{
 	fn sub_assign(&mut self, rhs: T) {
 		for i in 0..self.length{
@@ -338,6 +383,47 @@ impl<T:Num> Mul<Vector<T>> for Vector<T>{
 	}
 }
 
+impl<T:Num> Mul<&Vector<T>> for Vector<T> {
+	type Output = Vector<T>;
+	fn mul(self, rhs: &Vector<T>) -> Self::Output {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+
+		let mut vec = vec![T::default(); self.length];
+
+		for i in 0..self.length{
+			vec[i] = self[i] * rhs[i];
+		}
+		Vector::from(vec)
+	}
+}
+
+impl<T:Num> MulAssign<Vector<T>> for Vector<T>{
+	fn mul_assign(&mut self, rhs: Vector<T>) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+
+		for i in 0..self.length{
+			self[i] = self[i] * rhs[i];
+		}
+	}
+}
+
+impl<T:Num> MulAssign<&Vector<T>> for Vector<T>{
+	fn mul_assign(&mut self, rhs: &Vector<T>) {
+		if self.length != rhs.length {
+			panic!("!!!Different size of vectors!!!")
+		}
+
+		for i in 0..self.length{
+			self[i] = self[i] * rhs[i];
+		}
+	}
+}
+
+
 impl<T:Num> Mul<T> for Vector<T>{
 	type Output = Vector<T>;
 
@@ -348,6 +434,15 @@ impl<T:Num> Mul<T> for Vector<T>{
 			vec[i] = self[i] * rhs;
 		}
 		Vector::from(vec)
+	}
+}
+
+impl<T:Num> MulAssign<T> for Vector<T>  {
+	fn mul_assign(&mut self, rhs: T) {
+
+		for i in 0..self.length{
+			self[i] = self[i] * rhs;
+		}
 	}
 }
 
@@ -383,7 +478,6 @@ impl<T:Num> Iterator for Vector<T>{
 	type Item = T;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.data.pop()
-
 	}
 }
 
@@ -535,5 +629,35 @@ mod tests{
 		assert_eq!(15.0, a.abs_sum());
 	}
 
+	#[test]
+	fn add_many_times(){
+		let mut a = vector![1.0, 1.0, 1.0];
+		let mut b = vector![0.0, 0.0, 0.0];
+		b += 1.;
 
+		a += &b;
+		a = a + &b;
+		assert_eq!(vector![3.0,3.0,3.0], a);
+	}
+
+	#[test]
+	fn sub_many_times(){
+		let mut a = vector![1.0, 1.0, 1.0];
+		let mut b = vector![2.0, 2.0, 2.0];
+		a += 1.;
+		b -= 1.;
+		a -= &b;
+		a = a - b;
+		assert_eq!(vector![0.0,0.0,0.0], a);
+	}
+
+	#[test]
+	fn mul_many_times(){
+		let mut a = Vector::from_num(1.0, 3);
+		let mut b = Vector::from_num(0.5, 3);
+		b *= 4.0;
+		a *= &b;
+		a = a * &b;
+		assert_eq!(Vector::from_num(4.0, 3), a);
+	}
 }

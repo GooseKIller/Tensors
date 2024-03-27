@@ -4,15 +4,15 @@ use crate::linalg::Matrix;
 
 ///Mean squared error
 ///
-/// Don't work without this dumb number
+/// Number is here to help rust understand which type of data it will work
 pub struct MSE<T: Float>{
-    num: T
+    datatype_number: T
 }
 
 impl<T: Float> MSE<T>{
     pub fn new(a: T) -> Self{
         Self{
-            num:a,
+            datatype_number:a,
         }
     }
 
@@ -21,7 +21,7 @@ impl<T: Float> MSE<T>{
             panic!("!!!Size of input matrix and target must be equal!!!")
         }
         let length = input.data.len();
-        let difference = input - target;
+        let difference = input - &target;
         let mut total_loss = T::default();
         for i in 0..difference.data.len(){
             total_loss += difference.data[i] * difference.data[i];
@@ -38,7 +38,7 @@ mod tests{
 
     #[test]
     fn mse_loss_test(){
-        let input = matrix![[1.0,2.0,3.0,4.0]];
+        let input  = matrix![[1.0, 2.0, 3.0, 4.0]];
         let output = matrix![[1.0, 3.0, 3.5, 4.5]];
 
         let mse = MSE::new(DataType::f64());

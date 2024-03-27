@@ -17,9 +17,9 @@ Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self
 {
 }
 
-///Float type
+/// Float type
 ///
-/// Special Trait
+/// Special Numeric Trait for all floting points numbers
 ///
 /// For all float numbers (f32, f64)
 pub trait Float:

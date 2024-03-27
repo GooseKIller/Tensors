@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 use crate::linalg::Vector;
 use crate::{Float, Num};
 
@@ -18,7 +18,7 @@ use crate::{Float, Num};
 /// //[[1 2 3]
 /// //[4 5 6]
 /// //[7 8 9]]
-/// let matrix_b = Matrix::new(vec![1,2,3,4,5,6,7,8,9], 3, 3);// same as matrix_a
+/// let matrix_b = Matrix::new(vec![1,2,3,4,5,6,7,8,9], 3, 3);// same as matrix a
 /// ```
 #[macro_export]
 macro_rules! matrix {
@@ -32,6 +32,22 @@ macro_rules! matrix {
 }
 
 ///reference by (skyl4b)<https://github.com/TheAlgorithms/Rust/blob/master/src/math/matrix_ops.rs>
+///
+///Also since the matrix is implemented using vector, it is not simple struct, then all
+///mathematical methods are realized without borrowing
+///
+///So you should use & with the second part of calculation
+/// # Example
+///
+/// ```
+/// use tensors::linalg::Matrix;
+///
+/// let a = Matrix::from_num(0, 2, 2);
+/// let b = Matrix::from_num(1, 2, 2);
+///
+/// a + &b; // correct
+/// // a + b;  // incorrect
+/// ```
 #[derive(PartialEq, Eq, Debug)]
 pub struct Matrix<T:Num>{
     pub(crate) data: Vec<T>,
@@ -271,6 +287,19 @@ impl<T:Num> Add<&Matrix<T>> for Matrix<T>{
     }
 }
 
+impl<T:Num> AddAssign<&Matrix<T>> for Matrix<T>{
+    fn add_assign(&mut self, rhs: &Matrix<T>) {
+        if self.rows != rhs.rows || self.cols != rhs.cols{
+            panic!("!!!Matrix dimensions do not match!!!");
+        }
+        for i in 0..self.rows{
+            for j in 0..self.cols{
+                self[[i, j]] += rhs[[i, j]];
+            }
+        }
+    }
+}
+
 impl<T:Num> Add<T> for Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, rhs:T) -> Self::Output {
@@ -284,9 +313,19 @@ impl<T:Num> Add<T> for Matrix<T> {
     }
 }
 
-impl<T:Num> Sub<Matrix<T>> for Matrix<T>{
+impl<T:Num> AddAssign<T> for Matrix<T>{
+    fn add_assign(&mut self, rhs: T) {
+        for i in 0..self.rows{
+            for j in 0..self.cols{
+                self[[i, j]] += rhs;
+            }
+        }
+    }
+}
+
+impl<T:Num> Sub<&Matrix<T>> for Matrix<T>{
     type Output = Matrix<T>;
-    fn sub(self, rhs: Matrix<T>) -> Self::Output {
+    fn sub(self, rhs: &Matrix<T>) -> Self::Output {
         if self.rows != rhs.rows || self.cols != rhs.cols{
             panic!("!!!Matrix dimensions do not match!!!");
         }
@@ -295,6 +334,19 @@ impl<T:Num> Sub<Matrix<T>> for Matrix<T>{
                 result.push(self.data[i] - rhs.data[i]);
         }
         Matrix::new(result, self.rows, self.cols)
+    }
+}
+
+impl<T:Num> SubAssign<&Matrix<T>> for Matrix<T>{
+    fn sub_assign(&mut self, rhs: &Matrix<T>) {
+        if self.rows != rhs.rows || self.cols != rhs.cols{
+            panic!("!!!Matrix dimensions do not match!!!");
+        }
+        for i in 0..self.rows{
+            for j in 0..self.cols{
+                self[[i, j]] -= rhs[[i, j]];
+            }
+        }
     }
 }
 
@@ -310,6 +362,17 @@ impl<T:Num> Sub<T> for Matrix<T> {
         result
     }
 }
+
+impl<T:Num> SubAssign<T> for Matrix<T>{
+    fn sub_assign(&mut self, rhs: T) {
+        for i in 0..self.rows{
+            for j in 0..self.cols{
+                self[[i, j]] -= rhs;
+            }
+        }
+    }
+}
+
 
 impl<T:Num> Mul<&Matrix<T>> for Matrix<T>{
     type Output = Matrix<T>;
@@ -332,6 +395,27 @@ impl<T:Num> Mul<&Matrix<T>> for Matrix<T>{
     }
 }
 
+impl<T:Num> MulAssign<&Matrix<T>> for Matrix<T>{
+    /// Not recommend because sizes can switch
+    fn mul_assign(&mut self, rhs: &Matrix<T>) {
+        if self.cols != rhs.rows{
+            panic!("!!!Matrix amount of columns 1st matrix does not equals to amount of rows of the 2nd one!!!")
+        }
+        let mut result = Self::from_num(T::default(), self.rows, rhs.cols);
+        for i in 0..self.rows {
+            for j in 0..rhs.cols {
+                let mut sum = T::default();
+                for k in 0..self.cols{
+                    sum += self[[i, k]] * rhs[[k, j]];
+                }
+
+                result[[i,j]] = sum;
+            }
+        }
+        *self = result;
+    }
+}
+
 impl<T:Num> Mul<T> for Matrix<T>{
     type Output = Matrix<T>;
     fn mul(self, rhs: T) -> Self::Output {
@@ -342,6 +426,16 @@ impl<T:Num> Mul<T> for Matrix<T>{
             }
         }
         result
+    }
+}
+
+impl<T:Num> MulAssign<T> for Matrix<T>{
+    fn mul_assign(&mut self, rhs: T) {
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                self[[i,j]] = self[[i,j]] * rhs;
+            }
+        }
     }
 }
 
@@ -411,6 +505,18 @@ impl<T:Num> Display for Matrix<T> {
     }
 }
 
+impl <T:Num> Clone for Matrix<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            rows: self.rows.clone(),
+            cols: self.cols.clone()
+        }
+    }
+}
+
+
+// Float Number implementation
 impl<T:Float> Matrix<T> {
     pub fn norm(self, p:T) -> T{
         let one = 1.into();
@@ -453,17 +559,33 @@ impl<T:Float> Matrix<T> {
         }
         max_num
     }
-}
 
-impl <T:Num> Clone for Matrix<T> {
-    fn clone(&self) -> Self {
-        Self {
-            data: self.data.clone(),
-            rows: self.rows.clone(),
-            cols: self.cols.clone()
+    /// Finds determinant of matrix
+    ///
+    /// Using Gauss Method (<https://en.wikipedia.org/wiki/Gaussian_elimination>)
+    ///
+    /// O(N^3)
+    pub fn det(self) -> T{
+        if self.rows != self.cols {
+            panic!("!!!The determinant is defined only for square matrices!!!")
         }
+
+        let mut matrix = self.clone();
+
+        let mut det = 1.into();
+        for i in 0..self.rows{
+            for j in (i+1)..self.rows{
+                let coeff = matrix[[j, i]]/matrix[[i, i]];
+                for k in i..self.rows{
+                    matrix[[j, k]] = matrix[[j, k]] - coeff * matrix[[i, k]];
+                }
+            }
+            det = det * matrix[[i, i]];
+        }
+        det
     }
 }
+
 /*
 impl<T:Num> Iterator for Matrix<T> {
     type Item = T;
@@ -475,8 +597,16 @@ impl<T:Num> Iterator for Matrix<T> {
 
 #[cfg(test)]
 mod tests{
+    use crate::DataType;
     use crate::linalg::matrix::*;
 
+    #[test]
+    fn det_test(){
+        let a = matrix![[3.0, 7.0],
+                        [1.0, -4.0]];
+
+        assert_eq!(-19.0, a.det());
+    }
 
     #[test]
     fn add_col(){
@@ -484,7 +614,6 @@ mod tests{
             [3,4,5]];
         let column = vec![7,8];
         a.add_column(column);
-        println!("{}", a);
         let right = matrix![[1,2,3,7],[3,4,5,8]];
         assert_eq!(a, right);
     }
@@ -496,7 +625,6 @@ mod tests{
         let row = vec![7,8,9];
         a.add_row(row);
         let right = matrix![[1,2,3],[4,5,6],[7,8,9]];
-        println!("{}", a);
         assert_eq!(a, right);
     }
 
@@ -563,21 +691,20 @@ mod tests{
     #[test]
     fn macro_test(){
         let a = matrix!([1,2,3],[1,2,3],[1,2,3]);
-        println!("{}", a);
+        let b= Matrix::new(vec![1,2,3,1,2,3,1,2,3], 3, 3);
+        assert_eq!(b, a);
     }
 
     #[test]
     fn create_matrix(){
         let a = Matrix::from_num(10, 2,2);
-
-        println!("{a}");
     }
 
     #[test]
     fn sum_matrix(){
         let a = matrix![[1.0, 1.0],
                                     [1.0, 1.0]];
-        println!("{}", a.sum());
+        assert_eq!(4.0, a.sum());
     }
 
     #[test]
@@ -659,7 +786,7 @@ mod tests{
 
         let ans = matrix![[0.0, 0.0]];
 
-        assert_eq!(a-b, ans);
+        assert_eq!(a-&b, ans);
     }
 
     #[test]
@@ -684,5 +811,69 @@ mod tests{
         ];
 
         assert_eq!(a * &b, mul);
+    }
+
+    #[test]
+    fn mul_many_times(){
+        let mut a = matrix![[2,0],
+                                        [0,2]];
+        let b = matrix![[2,0],
+                                    [0,2]];
+
+        a = a * &b;
+        a = a * &b;
+        assert_eq!(b*2*2, a);
+    }
+
+    #[test]
+    fn sub_many_matrix(){
+        let mut a = matrix![[2.0, 2.0]];
+        let b = matrix![[1.0, 1.0]];
+
+        let ans = matrix![[0.0, 0.0]];
+
+        a = a - &b;
+        a = a - &b;
+        assert_eq!(ans, a);
+    }
+
+    #[test]
+    fn add_assign_many_times(){
+        let mut a = Matrix::from_num(0.0, 1, 2);
+        let mut b = a.clone();
+        b += 1.0;
+        b += 1f64;
+        a += &b;
+        a += &b;
+        let answer = matrix![[4.0, 4.0]];
+        assert_eq!(a, answer)
+    }
+
+    #[test]
+    fn sub_assign_many_times(){
+        let mut a = Matrix::from_num(2.0, 1, 2);
+        let mut b = a.clone();
+        b -= 0.5;
+        b -= 0.5f64;
+        a -= &b;
+        a -= &b;
+        let answer = matrix![[0.0, 0.0]];
+        assert_eq!(a, answer)
+    }
+
+    #[test]
+    fn mul_assign_many_times(){
+        let mut one = matrix![[1.0, 0.0],
+                                [0.0,1.0]];
+        let mut imaginary = matrix![[0.0, 1.0],
+                                    [1.0, 0.0]];
+        imaginary *= -1.0;
+        imaginary *= -1.0;
+
+        one *= &imaginary;
+        one *= &imaginary;
+
+        let answer = Matrix::single(DataType::f64(), 2, 2);
+        assert_eq!(one, answer);
     }
 }
