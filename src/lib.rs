@@ -11,19 +11,20 @@ pub mod loss;
 ///
 /// Special Trait
 ///
-/// For most of numbers like (i16, i32, i64, i128, f32, f64)
+/// For most of the numbers like (i16, i32, i64, i128, f32, f64)
 pub trait Num:
-Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + AddAssign + SubAssign + PartialOrd + Copy + Clone + From<u8> + Default + Display + Debug
+Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Div + AddAssign + SubAssign + PartialOrd + Copy + Clone + From<u8> + Default + Display + Debug + Sync + Send
 {
 }
 
 /// Float type
 ///
-/// Special Numeric Trait for all floting points numbers
+/// Special Numeric Trait for all floating points numbers
 ///
 /// For all float numbers (f32, f64)
 pub trait Float:
 Num{
+    fn one() -> Self;
     fn sqrt(self) -> Self;
     fn exp(self) -> Self;
 
@@ -38,6 +39,7 @@ Num{
 }
 
 impl Float for f32{
+    fn one() -> Self {1f32}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self { self.exp() }
     fn powf(self, n: f32) -> Self { self.powf(n) }
@@ -56,6 +58,7 @@ impl Float for f32{
 }
 
 impl Float for f64{
+    fn one() -> Self {1f64}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self {self.exp()}
     fn powf(self, n: f64) -> Self { self.powf(n) }
@@ -98,24 +101,17 @@ impl DataType {
 
 #[cfg(test)]
 mod tests{
-    use crate::activation::{Function, ReLU};
-    use crate::{DataType, matrix};
+    use crate::activation::Function;
+    use crate::matrix;
     use crate::linalg::Matrix;
     use crate::nn::Linear;
 
     #[test]
     fn simple_linear(){
-        let lay1:Linear<f64> = Linear::new(4, 5, true);
-        let act1 = ReLU::new();
-        let lay2:Linear<f64> = Linear::new(5, 2, true);
-
-        let input = matrix![[1.0, 2.0, 3.0, 4.0]];
-
-        let out = lay1.call(input);
-        let out = act1.call(out);
-        let out = lay2.call(out);
-
-        println!("{}", out)
+        let lay1:Linear<f64> = Linear::new(1, 1, true);
+        let data = matrix![[1.0]];
+        let out = lay1.call(data);
+        assert_eq!(lay1.get_data().sum(), out[[0,0]]);
 
     }
 }

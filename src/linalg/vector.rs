@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, AddAssign, Sub, Mul, Index, IndexMut, SubAssign, MulAssign};
 use crate::{Float, Num};
+use crate::linalg::{Matrix, Tensor};
 
 
 #[macro_export]
@@ -162,6 +163,13 @@ impl<T: Num> Vector<T>{
 			}
 		}
 		sum
+	}
+
+	pub fn try_from(value: Tensor<T>) -> Result<Self, &'static str>{
+		if value.shape.len() != 1{
+			return Err("Shape size must be 1");
+		}
+		Ok(Vector::from(value.data))
 	}
 }
 
@@ -458,6 +466,15 @@ impl<T: Num> From<Vec<T>> for Vector<T> {
 			data: value.clone(),
 			length: value.len()
 		}
+	}
+}
+
+impl<T:Num> From<Tensor<T>> for Vector<T>  {
+	fn from(value: Tensor<T>) -> Self{
+		if value.shape.len() != 1{
+			panic!("Shape size must be 1")
+		}
+		Vector::from(value.data)
 	}
 }
 

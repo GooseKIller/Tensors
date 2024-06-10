@@ -9,6 +9,8 @@
 
 mod vector;
 mod matrix;
+mod tensor;
 
 pub use vector::*;
 pub use matrix::*;
+pub use tensor::*;

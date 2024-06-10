@@ -1,18 +1,15 @@
-use crate::activation::Function;
 use crate::Float;
 use crate::linalg::Matrix;
 
 ///Mean squared error
 ///
 /// Number is here to help rust understand which type of data it will work
-pub struct MSE<T: Float>{
-    datatype_number: T
-}
+pub struct MSE<T: Float>{ _datatype_number: T }
 
 impl<T: Float> MSE<T>{
     pub fn new(a: T) -> Self{
         Self{
-            datatype_number:a,
+            _datatype_number:a,
         }
     }
 

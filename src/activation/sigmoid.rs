@@ -7,7 +7,7 @@ pub struct Sigmoid;
 
 impl Sigmoid{
     fn new() -> Self{
-        Self{}
+        Self
     }
 
     fn num_fun<T:Float>(&self, num:T) -> T{

@@ -13,19 +13,22 @@ impl<T:Float> Linear<T>
     where Standard: Distribution<T>{
 
     pub fn new(row:usize, col:usize, bias:bool) -> Self{
+        if bias{
+            let mut data = Vec::with_capacity(col*(row+1));
+            for _ in 0..((row+1)*col){
+                data.push(random::<T>());
+            }
+            let mut matrix = Matrix::new(data, row+1, col);
+            return Self{
+                matrix,
+                bias
+            }
+        }
         let mut data = Vec::with_capacity(row*col);
         for _ in 0..(col*row){
             data.push(random::<T>());
         }
-
         let mut matrix = Matrix::new(data, row, col);
-        if bias {
-            let mut bias_col = Vec::with_capacity(col);
-            for _ in 0..col{
-                bias_col.push(random::<T>());
-            }
-            matrix.add_row(bias_col);
-        }
         Self{
             matrix,
             bias
@@ -41,11 +44,28 @@ impl<T:Float> Linear<T>
     ///use tensors::matrix;
     ///use tensors::nn::Linear;
     ///
-    ///let linear:Linear<f64> = Linear::new(1, 2, true);
-    ///println!("{:?}", linear.shape());
+    ///let linear:Linear<f64> = Linear::new(1, 2, true);//with one bias row it will be 2x2
+    ///assert_eq!([2, 2], linear.shape());
     ///```
-    pub fn shape(&self) -> Vec<usize>{
-        vec![self.matrix.rows, self.matrix.cols]
+    pub fn shape(&self) -> [usize; 2] {
+        [self.matrix.rows, self.matrix.cols]
+    }
+
+    /// Return weights matrix
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tensors::matrix;
+    /// use tensors::linalg::Matrix;
+    /// use tensors::nn::Linear;
+    /// let act1:Linear<f64> = Linear::from(matrix![[1.0],
+    ///                                 [1.0]]);
+    /// let sum_num = 2.0;
+    ///assert_eq!(sum_num, act1.get_data().sum());
+    /// ```
+    pub fn get_data(&self) -> Matrix<T>{
+        self.matrix.clone()
     }
 }
 
@@ -118,5 +138,15 @@ mod tests{
         let m = Matrix::from_num(0.0, 1, 1);
         let call = linear.call(m);
         assert_eq!(Matrix::from_num(2.0,1,1), call)
+    }
+
+    #[test]
+    fn linear_shape(){
+        let linear = Linear::new(2, 1, true);
+        let matrix = matrix![[1.0, 2.0]];
+
+        let ans = linear.call(matrix);
+        assert_eq!(1, ans.rows);
+        assert_eq!(1, ans.cols);
     }
 }
