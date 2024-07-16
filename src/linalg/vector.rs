@@ -56,7 +56,7 @@ macro_rules! vector {
 #[derive(PartialEq, Eq, Debug)]
 pub struct Vector<T: Num>{
 	data: Vec<T>,
-	length: usize,
+	pub(crate) length: usize,
 }
 
 impl<T: Num> Vector<T>{
@@ -101,6 +101,16 @@ impl<T: Num> Vector<T>{
 
 
 
+	/// Returns length value
+	///
+	/// # Example
+	///
+	/// ```
+	/// use tensors::linalg::Vector;
+	///
+	/// let a = Vector::from(vec![1, 2, 3]);
+	/// a.len();//3
+	/// ```
 	pub fn len(self) -> usize{
 		self.length.clone()
 	}

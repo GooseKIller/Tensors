@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 use rayon::prelude::{IntoParallelRefMutIterator};
 use rayon::prelude::*;
 use crate::linalg::{Tensor, Vector};
@@ -305,6 +305,17 @@ impl<T:Num> IndexMut<[usize; 2]> for Matrix<T>{
     }
 }
 
+impl<T:Num> Neg for Matrix<T>{
+    type Output = Matrix<T>;
+    fn neg(self) -> Self::Output {
+        let mut data = vec![T::default(); self.rows*self.cols];
+        data.par_iter_mut().enumerate().for_each(|(i, x)| {
+            *x = -self.data[i];
+        });
+        Matrix::new(data, self.rows, self.cols)
+    }
+}
+
 impl<T:Num> Add<&Matrix<T>> for Matrix<T>{
     type Output = Matrix<T>;
 
@@ -401,6 +412,10 @@ impl<T:Num> Sub<&Matrix<T>> for Matrix<T>{
 
 impl<T:Num> SubAssign<&Matrix<T>> for Matrix<T>{
     fn sub_assign(&mut self, rhs: &Matrix<T>) {
+        if rhs.rows == 1 && rhs.cols == 1{
+            *self -= rhs.data[0];
+            return;
+        }
         if self.rows != rhs.rows || self.cols != rhs.cols{
             panic!("!!!Matrix dimensions do not match!!!");
         }
@@ -449,12 +464,45 @@ impl<T:Num> SubAssign<T> for Matrix<T>{
     }
 }
 
+impl<T:Num> Mul<&Vector<T>> for Matrix<T>{
+    type Output = Vector<T>;
+    fn mul(self, rhs: &Vector<T>) -> Self::Output {
+        if self.cols != rhs.length {
+            panic!("!!!Matrix amount of columns != Vector lengths\n\
+             Matrix cols {} Vector cols {}!!!", self.cols, rhs.length)
+        }
+        let mut data = vec![T::default(); self.rows];
+        data.par_iter_mut().enumerate().for_each(|(index, x)| {
+            for i in 0..self.cols{
+                *x += self[[index, i]] * rhs[i];
+            }
+        });
+        Vector::from(data)
+    }
+}
+
+impl<T:Num> Mul<&Vector<T>> for &Matrix<T>{
+    type Output = Vector<T>;
+    fn mul(self, rhs: &Vector<T>) -> Self::Output {
+        if self.cols != rhs.length {
+            panic!("!!!Matrix amount of columns != Vector lengths\n\
+             Matrix cols {} Vector cols {}!!!", self.cols, rhs.length)
+        }
+        let mut data = vec![T::default(); self.rows];
+        data.par_iter_mut().enumerate().for_each(|(index, x)| {
+            for i in 0..self.cols{
+                *x += self[[index, i]] * rhs[i];
+            }
+        });
+        Vector::from(data)
+    }
+}
 
 impl<T:Num> Mul<&Matrix<T>> for Matrix<T>{
     type Output = Matrix<T>;
     fn mul(self, rhs: &Matrix<T>) -> Self::Output {
         if self.cols != rhs.rows{
-            panic!("!!!Matrix amount of columns 1st matrix does not equals to amount of rows of the 2nd one!!!\n\
+            panic!("!!!Matrix amount of columns 1st matrix != to amount of rows of the 2nd one!!!\n\
              Matrix cols: {} Other Matrix rows: {}",self.rows, self.cols)
         }
 
@@ -468,6 +516,27 @@ impl<T:Num> Mul<&Matrix<T>> for Matrix<T>{
             *x = sum;
         });
         Self::new(data, self.rows, rhs.cols)
+    }
+}
+
+impl<T:Num> Mul<&Matrix<T>> for &Matrix<T>{
+    type Output = Matrix<T>;
+    fn mul(self, rhs: &Matrix<T>) -> Self::Output {
+        if self.cols != rhs.rows{
+            panic!("!!!Matrix amount of columns 1st matrix != to amount of rows of the 2nd one!!!\n\
+             Matrix cols: {} Other Matrix rows: {}",self.rows, self.cols)
+        }
+
+        let mut data = vec![T::default() ; self.rows*rhs.cols];
+        data.par_iter_mut().enumerate().for_each(|(index, x)| {
+            let (i, j)  = (index / rhs.cols, index % rhs.cols);
+            let mut sum = T::default();
+            for k in 0..self.cols {
+                sum += self[[i, k]] * rhs[[k, j]];
+            }
+            *x = sum;
+        });
+        Matrix::new(data, self.rows, rhs.cols)
     }
 }
 
@@ -731,7 +800,8 @@ impl<T:Num> Iterator for Matrix<T> {
 
 #[cfg(test)]
 mod tests{
-    use crate::DataType;
+    use std::io;
+    use crate::{DataType, vector};
     use crate::linalg::matrix::*;
     use std::time::Instant;
 
@@ -747,6 +817,13 @@ mod tests{
         let a = matrix![[0,-1],[1,0]];
         let b = matrix![[0,1],[-1,0]];
         assert_eq!(Matrix::single(DataType::i32(), 2, 2), a * &b)
+    }
+
+    #[test]
+    fn mul_max_vector(){
+        let a = matrix![[0,0,0],[1,1,1],[2,2,2]];
+        let b = vector![1,2,3];
+        assert_eq!(vector![0, 6, 12], a * &b);
     }
 
     #[test]
@@ -1116,5 +1193,31 @@ mod tests{
         }
 
         assert_eq!(b, (a.inv().unwrap() * &ans).get_col(0));
+    }
+
+    #[test]
+    fn focus_wierd(){
+        let mut val = vec![0;5*5];
+        for i in 0..(5*5){
+            val[i] = (i as i32)+11;
+        }
+        let matrix = Matrix::new(val,5,5);
+        println!("{}", matrix);
+        println!("Remember your numbers\n\n\n\n\n\n\n\n\n");
+        let matrix = matrix.transpose();
+        println!("{matrix}");
+        for i in 0..5{
+            println!("which column has your {}st number", i+1);
+            let mut str_index = String::new();
+            io::stdin().read_line(&mut str_index).expect("Enter a number");
+            let index:usize = match str_index.trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Ошибка: Введите корректное целое число!");
+                    return;
+                }
+            };
+            println!("Your number is {}", matrix[[i, index-1]]);
+        }
     }
 }

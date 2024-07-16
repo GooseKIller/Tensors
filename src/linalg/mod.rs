@@ -5,7 +5,7 @@
 //!
 //! 2.[Matrix]
 //!
-//! 3.Tensor (doesn't exist now ( ´•︵•` ))
+//! 3.[Tensor] (not finished)
 
 mod vector;
 mod matrix;

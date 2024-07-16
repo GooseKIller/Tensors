@@ -5,7 +5,7 @@ use rand::random;
 use crate::activation::Function;
 
 pub struct Linear<T: Float>{
-    matrix:Matrix<T>,
+    pub(crate) matrix:Matrix<T>,
     bias:bool,
 }
 

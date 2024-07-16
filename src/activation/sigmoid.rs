@@ -12,7 +12,7 @@ impl Sigmoid{
 
     fn num_fun<T:Float>(&self, num:T) -> T{
         let one:T = 1.into();
-        one/(one+num.neg().exp())
+        one/(one-num.exp())
     }
 
 

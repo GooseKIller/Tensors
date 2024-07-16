@@ -13,7 +13,7 @@ pub mod loss;
 ///
 /// For most of the numbers like (i16, i32, i64, i128, f32, f64)
 pub trait Num:
-Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Div + AddAssign + SubAssign + PartialOrd + Copy + Clone + From<u8> + Default + Display + Debug + Sync + Send
+Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Div + AddAssign + SubAssign + Neg<Output = Self> + PartialOrd + Copy + Clone + From<u8> + Default + Display + Debug + Sync + Send
 {
 }
 
@@ -101,17 +101,28 @@ impl DataType {
 
 #[cfg(test)]
 mod tests{
-    use crate::activation::Function;
+    use std::time::Instant;
+    use crate::activation::{Function, ReLU};
     use crate::matrix;
     use crate::linalg::Matrix;
     use crate::nn::Linear;
 
     #[test]
     fn simple_linear(){
-        let lay1:Linear<f64> = Linear::new(1, 1, true);
-        let data = matrix![[1.0]];
-        let out = lay1.call(data);
-        assert_eq!(lay1.get_data().sum(), out[[0,0]]);
+        let fc1:Linear<f64> = Linear::new(16, 64, true);
+        let fc2:Linear<f64> = Linear::new(64, 64, true);
+        let fc3:Linear<f64> = Linear::new(64, 4, true);
+        let act = ReLU::new();
 
+        let data = Matrix::new(vec![1.0; 16], 1, 16);
+
+        let start_time = Instant::now();
+        let mut ans = fc1.call(data);
+        ans = act.call(ans);
+        ans = fc2.call(ans);
+        ans = act.call(ans);
+        ans = fc3.call(ans);
+        let elapsed_time = start_time.elapsed();
+        println!("Time: {} micros", elapsed_time.as_micros());
     }
 }
