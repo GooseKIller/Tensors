@@ -73,6 +73,8 @@ mod tests{
     fn stochastic_descent_test(){
         let n = 1000;
         let m = 3;
+
+        //training data
         let mut x = vec![vec![0f64; m]; n];
         let mut y = vec![0f64; n];
         for i in 0..n{
@@ -83,6 +85,8 @@ mod tests{
             y[i] = 2_f64*i_num + 5_f64*(1f64-i_num)  + 8_f64*j_num;
 
         }
+
+        // batch size, learning rate, epochs
         let b = 100;
         let alpha = 0.1;
         let e = 500;
@@ -92,17 +96,11 @@ mod tests{
         for _ in 0..e {
             for i in (b..n).step_by(b){
                 let x_batch = Matrix::from(x[i- b..i].to_vec());//Matrix::from(x.to_vec());//
-                //println!("X:{x_batch}");
                 let y_batch = Vector::from(y[i- b..i].to_vec());//y.to_vec());
-                //println!("Y:{y_batch}");
                 let f = &x_batch * &w;
-                //println!("F:{f}");
                 let err = f - y_batch;
-                //println!("ERR:{}", err.clone().sum() / (err.length as f64));
                 let grad = x_batch.transpose() * &err * 2f64 * (1f64 / (b as f64));
-                //println!("Grad:{}", grad);
                 w = w - grad * alpha;
-                //println!("W:{w}\n");
                 if (answer.clone() - &w).abs_sum() < 0.01{
                     break;
                 }
