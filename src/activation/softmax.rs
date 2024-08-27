@@ -2,11 +2,14 @@ use crate::activation::Function;
 use crate::Float;
 use crate::linalg::{Matrix, Vector};
 
-/// The softmax function or normalized exponential function
+/// Softmax function or normalized exponential function
 ///
 /// converts a vector of K real numbers into a probability distribution of K possible outcomes.
+/// # Defined as:
 ///
-/// x_i = \frac{e^{x_i}}{(e^{x_1}+..+e^{x_n})}
+///```math
+///  Softmax(x_i) = \frac{e^{x_i}}{\sum_{j=1}^{n} {e}^(x_j)}
+///```
 pub struct SoftMax;
 
 impl SoftMax{
@@ -40,8 +43,9 @@ impl<T:Float> Function<T> for SoftMax {
 
     }
 
-    /// f'(x_i)= softmax(x_i) * (δ_{ij} — softmax(x_j))
-    /// δ_{ij} - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
+    /// $`Softmax'(x_i)= Softmax(x_i) * (δ_{ij} - Softmax(x_j))`$
+    ///
+    /// $`δ_{ij}`$ - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let softmax = self.call(matrix);

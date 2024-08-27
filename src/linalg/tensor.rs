@@ -202,8 +202,8 @@ mod test{
     fn new_tensor(){
         let data = vec![1];
         let shape = vec![1usize, 1usize, 1usize];
-        let tensor = Tensor::new(data, shape.clone());
-        let tensor = Tensor::from_num(1, shape);
+        let _tensor = Tensor::new(data, shape.clone());
+        let _tensor = Tensor::from_num(1, shape);
     }
 
     #[test]

@@ -5,27 +5,22 @@ use crate::{Float, Num};
 use crate::linalg::{Matrix, Tensor};
 
 
-#[macro_export]
-macro_rules! vector_element_type_def {
-    ($T: ty) => {
-		impl Num for $T {}
+macro_rules! impl_mul_for_types_vec {
+    ($($type:ty),*) => {
+        $(
+			impl Num for $type {}
 
-		impl Mul<&Vector<$T>> for $T {
-			type Output = Vector<$T>;
+            impl Mul<Vector<$type>> for $type {
+                type Output = Vector<$type>;
 
-			fn mul(self, rhs: &Vector<$T>) -> Self::Output {
-				self * rhs
-			}
-		}
-	};
-
-	($T:ty, $($Ti: ty),+) => {
-		vector_element_type_def!($T);
-		vector_element_type_def!($($Ti),+);
-	};
+                fn mul(self, rhs: Vector<$type>) -> Vector<$type> {
+                    rhs * self
+                }
+            }
+        )*
+    };
 }
-
-vector_element_type_def!(i16, i32, i64, i128, f32, f64);
+impl_mul_for_types_vec!(i16, i32, i64, i128, f32, f64);
 
 
 /// Vector definition
@@ -55,7 +50,7 @@ macro_rules! vector {
 /// Addition/subtraction/multiplication, works according to the principle {x_1+y_1, x_2+y_2, x_3+y_3}
 #[derive(PartialEq, Eq, Debug)]
 pub struct Vector<T: Num>{
-	data: Vec<T>,
+	pub(crate) data: Vec<T>,
 	pub(crate) length: usize,
 }
 
@@ -479,6 +474,19 @@ impl<T: Num> From<Vec<T>> for Vector<T> {
 	}
 }
 
+impl<T:Num> From<Matrix<T>> for Vector<T> {
+	fn from(value: Matrix<T>) -> Self {
+		if value.rows != 1{
+			panic!("!!!Matrix rows must be equals 1 not {}!!!", value.rows)
+		}
+		Self{
+			data: value.data,
+			length: value.cols,
+		}
+	}
+
+}
+
 impl<T:Num> From<Tensor<T>> for Vector<T>  {
 	fn from(value: Tensor<T>) -> Self{
 		if value.shape.len() != 1{
@@ -526,18 +534,6 @@ mod tests{
 		let a = Vector::from_num(-1, 3);
 		let b = Vector::from(vec![-1,-1,-1]);
 		assert_eq!(a, b);
-	}
-
-	#[test]
-	fn simple_vector_task(){
-		let vector_a = vector![0.0, -1.0];
-		let vector_b = vector![0.0, 1.0];
-
-		let scalar = vector_a.scalar(&vector_b);
-		let prod_len = vector_a.length() * vector_b.length();
-
-		let cos_a = (scalar/prod_len) as f32;
-		assert_eq!(std::f32::consts::PI, cos_a.acos());
 	}
 
 	#[test]

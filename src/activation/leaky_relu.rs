@@ -2,14 +2,31 @@ use crate::activation::Function;
 use crate::Float;
 use crate::linalg::Matrix;
 
+
+/// LeakyReLU
+///
+/// # Defined as:
+///
+/// ```math
+///  LeakyReLU(x) = max(x, \alpha x)
+///```
+/// or
+///```math
+///  LeakyReLU(x) = \left\{
+/// \begin{array}{ll}
+/// x & \text{if } x \geq 0 \\
+/// \alpha x & \text{otherwise}
+/// \end{array}
+/// \right.
+/// ```
 pub struct LeakyReLU<T:Float>{
     alpha: T,
 }
 
 impl<T:Float> LeakyReLU<T> {
     fn new(_:T) -> Self{
-        let two:T = 2.into();
-        let ten:T = 10.into();
+        let two = T::from_usize(2);
+        let ten = T::from_usize(10);
         Self{
             alpha: two/ten
         }
@@ -52,6 +69,15 @@ impl<T:Float> Function<T> for LeakyReLU<T>{
         }
         Matrix::new(data, row, cols)
     }
+    /// # Derivative of LeakyReLU
+    /// ```math
+    /// LeakyReLU'(x) = \left\{
+    /// \begin{array}{ll}
+    /// 1 & \text{if } x \geq 0 \\
+    /// \alpha & \text{otherwise}
+    /// \end{array}
+    /// \right.
+    /// ```
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);

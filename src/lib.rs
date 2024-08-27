@@ -6,6 +6,7 @@ pub mod linalg;
 pub mod activation;
 pub mod nn;
 pub mod loss;
+pub mod optim;
 
 /// Numeric type
 ///
@@ -13,7 +14,23 @@ pub mod loss;
 ///
 /// For most of the numbers like (i16, i32, i64, i128, f32, f64)
 pub trait Num:
-Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Div + AddAssign + SubAssign + Neg<Output = Self> + PartialOrd + Copy + Clone + From<u8> + Default + Display + Debug + Sync + Send
+    Add<Output = Self> +
+    Sub<Output = Self> +
+    Mul<Output = Self> +
+    Div<Output = Self> +
+    Div +
+    AddAssign +
+    SubAssign +
+    Neg<Output = Self> +
+    PartialOrd +
+    Copy +
+    Clone +
+    From<u8> +
+    Default +
+    Display +
+    Debug +
+    Sync +
+    Send + 'static
 {
 }
 
@@ -29,6 +46,7 @@ Num{
     fn exp(self) -> Self;
 
     fn powf(self, n:Self) -> Self;
+    fn abs(self) -> Self;
     fn neg(self) -> Self;
     
     fn to_f64(self) -> f64;
@@ -36,12 +54,15 @@ Num{
     fn selu_lambda(self) -> Self;
 
     fn selu_alpha(self) -> Self;
+
+    fn from_usize(value: usize) -> Self;
 }
 
 impl Float for f32{
     fn one() -> Self {1f32}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self { self.exp() }
+    fn abs(self) -> Self { self.abs() }
     fn powf(self, n: f32) -> Self { self.powf(n) }
     fn neg(self) -> Self { Neg::neg(self) }
     fn to_f64(self) -> f64 {
@@ -55,12 +76,14 @@ impl Float for f32{
     fn selu_alpha(self) -> Self {
         1.67326f32
     }
+    fn from_usize(value: usize) -> Self {value as f32}
 }
 
 impl Float for f64{
     fn one() -> Self {1f64}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self {self.exp()}
+    fn abs(self) -> Self { self.abs() }
     fn powf(self, n: f64) -> Self { self.powf(n) }
     fn neg(self) -> Self {Neg::neg(self)}
     fn to_f64(self) -> f64 {
@@ -73,6 +96,8 @@ impl Float for f64{
     fn selu_alpha(self) -> Self {
         1.6732632423543772848170429916717f64
     }
+
+    fn from_usize(value: usize) -> Self {value as f64}
 }
 
 pub struct DataType;
@@ -103,7 +128,6 @@ impl DataType {
 mod tests{
     use std::time::Instant;
     use crate::activation::{Function, ReLU};
-    use crate::matrix;
     use crate::linalg::Matrix;
     use crate::nn::Linear;
 
@@ -124,5 +148,6 @@ mod tests{
         ans = fc3.call(ans);
         let elapsed_time = start_time.elapsed();
         println!("Time: {} micros", elapsed_time.as_micros());
+        println!("{}", ans)
     }
 }

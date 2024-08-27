@@ -1,48 +1,46 @@
 use crate::activation::Function;
-use crate::Float;
 use crate::linalg::Matrix;
+use crate::Float;
 
-
-/// Scaled Exponential Linear Units, are activation functions that induce self-normalization. SELU network neuronal activations automatically converge to a zero mean and unit variance.
-/// Mathematically, it is expressed as:
+/// Scaled Exponential Linear Unit
+/// # Defined as:
+///```math
+/// SELU(x) = \left\{
+/// \begin{array}{ll}
+/// \lambda x & \text{if } x > 0 \\
+/// \lambda \alpha \left( e^x - 1 \right) & \text{if } x \leq 0
+/// \end{array}
+/// \right.
+/// ```
 ///
-/// f(x)=λx        if  x>0
-///
-/// f(x)=λα(ex−1)  if  x≤0
+/// By default,
 ///
 /// α = 1.67326
 ///
 /// λ = 1.0507
-pub struct SELU<T:Float>{
+pub struct SELU<T: Float> {
     alpha: T,
     lambda: T,
 }
 
-impl<T:Float> SELU<T> {
-
-    ///Number here for generics
-    ///
-    /// This number would not be used anywhere
-    fn new(_:T) -> Self{
-        let alpha:T = T::selu_alpha(T::default());
-        let lambda:T = T::selu_lambda(T::default());
-      Self{
-          alpha,
-          lambda,
-      }
+impl<T: Float> SELU<T> {
+    fn new(_datatype_number: T) -> Self {
+        let alpha: T = T::selu_alpha(T::default());
+        let lambda: T = T::selu_lambda(T::default());
+        Self { alpha, lambda }
     }
 
-    fn selu_num(&self, x:T) -> T{
-        let one:T = 1.into();
-        if x > T::default(){
+    fn selu_num(&self, x: T) -> T {
+        let one: T = 1.into();
+        if x > T::default() {
             self.lambda * x
         } else {
             self.lambda * self.alpha * (x.exp() - one)
         }
     }
 
-    /// Maybe wrong
-    fn selu_der(&self, x:T) -> T{
+    // Maybe wrong
+    fn selu_der(&self, x: T) -> T {
         if x > T::default() {
             self.lambda
         } else {
@@ -51,14 +49,17 @@ impl<T:Float> SELU<T> {
     }
 }
 
-impl<T:Float> From<(T, T)> for SELU<T>{
+impl<T: Float> From<(T, T)> for SELU<T> {
     fn from(params: (T, T)) -> Self {
         let (alpha, scale) = params;
-        Self{alpha, lambda: scale }
+        Self {
+            alpha,
+            lambda: scale,
+        }
     }
 }
 
-impl<T:Float> Function<T> for SELU<T>{
+impl<T: Float> Function<T> for SELU<T> {
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);
@@ -68,6 +69,15 @@ impl<T:Float> Function<T> for SELU<T>{
         }
         Matrix::new(data, row, cols)
     }
+    ///# Derivative of SELU
+    ///```math
+    /// SELU'(x) = \left\{
+    /// \begin{array}{ll}
+    /// \lambda & \text{if } x > 0 \\
+    /// \lambda \alpha e^x & \text{if } x \leq 0
+    /// \end{array}
+    /// \right.
+    /// ```
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);
@@ -80,13 +90,13 @@ impl<T:Float> Function<T> for SELU<T>{
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use crate::activation::{Function, SELU};
-    use crate::{matrix, DataType};
     use crate::linalg::Matrix;
+    use crate::{matrix, DataType};
 
     #[test]
-    fn selu(){
+    fn selu() {
         let matrix = matrix![[0.0, 1.0]];
         let a = SELU::new(DataType::f64());
         let matrix = a.call(matrix);
@@ -94,7 +104,7 @@ mod tests{
     }
 
     #[test]
-    fn derivative_selu(){
+    fn derivative_selu() {
         let matrix = matrix![[0.0, 1.0]];
         let a = SELU::new(DataType::f64());
         let matrix = a.derivative(matrix);

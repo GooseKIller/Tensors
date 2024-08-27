@@ -1,11 +1,14 @@
 //! # Linear Algebra
+//!
+//! This module includes fundamental linear algebra structures for computations in machine learning.
+//!
 //! Objects:
 //!
-//! 1.[Vector]
+//! 1.[Vector] - A one-dimensional array for representing points or directions in space.
 //!
-//! 2.[Matrix]
+//! 2.[Matrix] - A two-dimensional array for representing linear transformations and data structures.
 //!
-//! 3.[Tensor] (not finished)
+//! 3.[Tensor] (not finished) - A multi-dimensional array for generalizing vectors and matrices to higher dimensions.
 
 mod vector;
 mod matrix;

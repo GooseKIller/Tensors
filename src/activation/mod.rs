@@ -4,13 +4,17 @@
 //!
 //! They all have call and derivative methods.
 //!
-//!1.[Sigmoid]
+//!1.[ELU]
 //!
-//!2.[ReLU]
+//!2.[LeakyReLU]
 //!
-//!3.GelU
+//!3.[ReLU]
 //!
-//!4.[SoftMax]
+//!4.[SELU]
+//!
+//!5.[Sigmoid]
+//!
+//!6.[SoftMax]
 
 mod relu;
 mod softmax;
@@ -19,6 +23,7 @@ mod leaky_relu;
 mod elu;
 mod selu;
 
+use std::any::Any;
 pub use relu::*;
 pub use softmax::*;
 pub use sigmoid::*;
@@ -32,7 +37,7 @@ use crate::Float;
 /// All activation functions works only with Float types
 ///
 /// All activation function must implement this trait Function
-pub trait Function<T: Float>{
+pub trait Function<T: Float>: Any{
 
     /// Rust does not have similar thing like \_\_call__ in Python
     ///
@@ -41,4 +46,18 @@ pub trait Function<T: Float>{
 
     /// Derivative for Function
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T>;
+
+    fn is_linear(&self) -> bool{
+        false
+    }
+
+    fn get_data(&self) -> Option<Matrix<T>> {
+        None
+    }
+    fn get_bias(&self) -> Option<Matrix<T>>{
+        None
+    }
+
+    fn set_data(&mut self, data:Matrix<T>){}
+    fn set_bias(&mut self, new_bias:Matrix<T>){}
 }

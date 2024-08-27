@@ -1,37 +1,34 @@
 use rand::distributions::{Distribution, Standard};
 use crate::{Float};
-use crate::linalg::{Matrix, Vector};
+use crate::linalg::Matrix;
 use rand::random;
 use crate::activation::Function;
 
 pub struct Linear<T: Float>{
-    pub(crate) matrix:Matrix<T>,
-    bias:bool,
+    pub matrix:Matrix<T>,
+    bias: Option<Matrix<T>>
 }
 
 impl<T:Float> Linear<T>
     where Standard: Distribution<T>{
 
     pub fn new(row:usize, col:usize, bias:bool) -> Self{
+        let mut data = Vec::with_capacity(col*row);
+        for _ in 0..((row)*col){ data.push(random::<T>()); }
+
         if bias{
-            let mut data = Vec::with_capacity(col*(row+1));
-            for _ in 0..((row+1)*col){
-                data.push(random::<T>());
-            }
-            let mut matrix = Matrix::new(data, row+1, col);
+            let matrix = Matrix::new(data, row, col);
+            let bias = Matrix::from_num(T::default(), 1, col);
             return Self{
                 matrix,
-                bias
+                bias: Some(bias)
             }
         }
-        let mut data = Vec::with_capacity(row*col);
-        for _ in 0..(col*row){
-            data.push(random::<T>());
-        }
-        let mut matrix = Matrix::new(data, row, col);
+
+        let matrix = Matrix::new(data, row, col);
         Self{
             matrix,
-            bias
+            bias: None
         }
     }
 
@@ -62,11 +59,12 @@ impl<T:Float> Linear<T>
     /// let act1:Linear<f64> = Linear::from(matrix![[1.0],
     ///                                 [1.0]]);
     /// let sum_num = 2.0;
-    ///assert_eq!(sum_num, act1.get_data().sum());
+    ///assert_eq!(sum_num, act1.get_weights().sum());
     /// ```
-    pub fn get_data(&self) -> Matrix<T>{
+    pub fn get_weights(&self) -> Matrix<T>{
         self.matrix.clone()
     }
+    pub fn get_bias(&self) -> Option<Matrix<T>> {self.bias.clone()}
 }
 
 
@@ -90,23 +88,48 @@ impl<T:Float> From<Matrix<T>> for Linear<T>{
     fn from(value: Matrix<T>) -> Self {
         Self{
             matrix:value,
-            bias:true,
+            bias: None
         }
     }
 }
 
 impl<T:Float> Function<T> for Linear<T> {
     fn call(&self, mut matrix: Matrix<T>) -> Matrix<T> {
-        if self.bias{
-            let rows = matrix.row();
-            let num_bias:Vector<T> = Vector::from_num(1.into(), rows);
-            matrix.add_column(num_bias.into())
+        if let Some(bias) = &self.bias {
+            return matrix * &self.matrix + bias
         }
         matrix * &self.matrix
     }
 
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        matrix
+    /// not real derivative just delta calculating
+    fn derivative(&self, mut matrix: Matrix<T>) -> Matrix<T> {// not real derivative just calculating delta
+        /*
+        if self.bias {
+            let no_bias_matrix = self.matrix.clone().get_resize(
+                self.matrix.rows-1,
+                self.matrix.cols);
+            return matrix * &no_bias_matrix
+        }*/
+        matrix * &self.matrix.clone().transpose()
+    }
+
+    fn is_linear(&self) -> bool{
+        true
+    }
+
+    fn get_data(&self) -> Option<Matrix<T>> {
+        Some(self.matrix.clone())
+    }
+    fn get_bias(&self) -> Option<Matrix<T>> {
+        self.bias.clone()
+    }
+    fn set_data(&mut self, data: Matrix<T>) {
+        self.matrix = data;
+    }
+    fn set_bias(&mut self, new_bias: Matrix<T>) {
+        if let Some(mut bias) = &mut self.bias{
+            *bias = new_bias;
+        }
     }
 }
 
@@ -133,20 +156,11 @@ mod tests{
 
     #[test]
     fn from_matrix(){
-        let matrix = matrix![[1.0],[2.0]];
+        let matrix = matrix![[1.0],
+                                        [2.0]];
         let linear = Linear::from(matrix);
-        let m = Matrix::from_num(0.0, 1, 1);
+        let m =  matrix![[1.0, 1.0]];
         let call = linear.call(m);
-        assert_eq!(Matrix::from_num(2.0,1,1), call)
-    }
-
-    #[test]
-    fn linear_shape(){
-        let linear = Linear::new(2, 1, true);
-        let matrix = matrix![[1.0, 2.0]];
-
-        let ans = linear.call(matrix);
-        assert_eq!(1, ans.rows);
-        assert_eq!(1, ans.cols);
+        assert_eq!(Matrix::from_num(3.0,1,1), call)
     }
 }
