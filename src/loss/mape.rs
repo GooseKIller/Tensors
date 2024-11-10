@@ -51,14 +51,14 @@ impl<T:Float> Loss<T> for MAPE<T> {
                 let sign = if output.data[i] > target.data[i] {
                     T::one() // 1
                 } else if output.data[i] < target.data[i] {
-                    T::one().neg() // -1
+                    Float::neg(T::one()) // -1
                 } else {
                     T::default() // 0
                 };
                 grad[i] = sign / target.data[i];
             }
         }
-        Matrix::new(grad, target.rows, output.cols) / T::from_usize(length)
+        Matrix::new(grad, target.rows, output.cols) * (T::from_usize(1)/ T::from_usize(length))
     }
 
 }

@@ -1,34 +1,87 @@
 use rand::distributions::{Distribution, Standard};
 use crate::{Float};
-use crate::linalg::Matrix;
+use crate::linalg::{Matrix, Vector};
 use rand::random;
 use crate::activation::Function;
 
 pub struct Linear<T: Float>{
     pub matrix:Matrix<T>,
-    bias: Option<Matrix<T>>
+    pub(crate) bias: bool
 }
 
 impl<T:Float> Linear<T>
     where Standard: Distribution<T>{
 
+    /// Creates a new matrix with added bias(optional)
+    ///
+    /// bias realized as double row
     pub fn new(row:usize, col:usize, bias:bool) -> Self{
-        let mut data = Vec::with_capacity(col*row);
-        for _ in 0..((row)*col){ data.push(random::<T>()); }
 
+        // Xavier method
+        let mut data = Vec::with_capacity(row * col);
+        let limit = (T::from_usize(6) / T::from_usize(row + col)).sqrt(); // Для равномерного распределения
+
+        for _ in 0..(col * row) {
+            let value = random::<T>() * T::from(2) * limit - limit; // Генерация значений в диапазоне [-limit, limit]
+            data.push(value);
+        }
+
+        if bias {
+            let mut bias_data = Vec::with_capacity(col);
+            for _ in 0..col {
+                bias_data.push(T::default()); // Инициализация смещений нулями
+            }
+            data.extend(bias_data);
+        }
+
+        let matrix = Matrix::new(data, row + if bias { 1 } else { 0 }, col);
+        Self {
+            matrix,
+            bias,
+        }
+
+        /*
         if bias{
-            let matrix = Matrix::new(data, row, col);
-            let bias = Matrix::from_num(T::default(), 1, col);
+            let mut data = Vec::with_capacity(col*(row+1));
+            for _ in 0..((row+1)*col){
+                data.push(random::<T>());
+            }
+            let matrix = Matrix::new(data, row+1, col);
             return Self{
                 matrix,
-                bias: Some(bias)
+                bias
             }
         }
 
+        let mut data = Vec::with_capacity(row*col);
+        for _ in 0..(col*row){
+            data.push(random::<T>());
+        }
         let matrix = Matrix::new(data, row, col);
         Self{
             matrix,
-            bias: None
+            bias
+        }*/
+    }
+
+    /// Creates a matrix without random numbers
+    ///
+    /// the same as ::new method
+    pub fn zeros(row:usize, col:usize, bias:bool) -> Self{
+        if bias{
+            let data = vec![T::default(); col*(row+1)];
+            let matrix = Matrix::new(data, row+1, col);
+            return Self{
+                matrix,
+                bias
+            }
+        }
+
+        let data = vec![T::default(); col*row];
+        let matrix = Matrix::new(data, row, col);
+        Self{
+            matrix,
+            bias
         }
     }
 
@@ -64,7 +117,6 @@ impl<T:Float> Linear<T>
     pub fn get_weights(&self) -> Matrix<T>{
         self.matrix.clone()
     }
-    pub fn get_bias(&self) -> Option<Matrix<T>> {self.bias.clone()}
 }
 
 
@@ -88,29 +140,28 @@ impl<T:Float> From<Matrix<T>> for Linear<T>{
     fn from(value: Matrix<T>) -> Self {
         Self{
             matrix:value,
-            bias: None
+            bias: true
         }
     }
 }
 
 impl<T:Float> Function<T> for Linear<T> {
+    fn name(&self) -> String {
+        let shape = self.matrix.shape();
+        format!("Linear_{}:{} {}", self.bias as u8, shape[0], shape[1])
+    }
     fn call(&self, mut matrix: Matrix<T>) -> Matrix<T> {
-        if let Some(bias) = &self.bias {
-            return matrix * &self.matrix + bias
+        if self.bias{
+            let rows = matrix.row();
+            let num_bias:Vector<T> = Vector::from_num(1.into(), rows);
+            matrix.add_column(num_bias.into())
         }
         matrix * &self.matrix
     }
 
     /// not real derivative just delta calculating
-    fn derivative(&self, mut matrix: Matrix<T>) -> Matrix<T> {// not real derivative just calculating delta
-        /*
-        if self.bias {
-            let no_bias_matrix = self.matrix.clone().get_resize(
-                self.matrix.rows-1,
-                self.matrix.cols);
-            return matrix * &no_bias_matrix
-        }*/
-        matrix * &self.matrix.clone().transpose()
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {// not real derivative just calculating gradients
+        &matrix * &self.get_weights().unwrap().transpose()
     }
 
     fn is_linear(&self) -> bool{
@@ -120,16 +171,37 @@ impl<T:Float> Function<T> for Linear<T> {
     fn get_data(&self) -> Option<Matrix<T>> {
         Some(self.matrix.clone())
     }
+    
+    fn set_data(&mut self, _data: Matrix<T>) {
+        self.matrix = _data;
+    }
+
+    fn get_weights(&self) -> Option<Matrix<T>> {
+        let weights = &self.matrix.data[0..(self.matrix.rows-1)*self.matrix.cols];
+        Some(
+            Matrix::new(
+                weights.to_owned(),
+                self.matrix.rows-1,
+                self.matrix.cols
+            )
+        )
+    }
+
     fn get_bias(&self) -> Option<Matrix<T>> {
-        self.bias.clone()
-    }
-    fn set_data(&mut self, data: Matrix<T>) {
-        self.matrix = data;
-    }
-    fn set_bias(&mut self, new_bias: Matrix<T>) {
-        if let Some(mut bias) = &mut self.bias{
-            *bias = new_bias;
+        if !self.bias{
+            return None;
         }
+        Some(
+            Matrix::from(
+                self.matrix.get_row(
+                    self.matrix.row()-1
+                )
+            )
+        )
+    }
+
+    fn is_bias(&self) -> bool {
+        self.bias
     }
 }
 
@@ -159,7 +231,7 @@ mod tests{
         let matrix = matrix![[1.0],
                                         [2.0]];
         let linear = Linear::from(matrix);
-        let m =  matrix![[1.0, 1.0]];
+        let m =  matrix![[1.0]];
         let call = linear.call(m);
         assert_eq!(Matrix::from_num(3.0,1,1), call)
     }

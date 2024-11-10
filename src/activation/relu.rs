@@ -24,6 +24,10 @@ impl ReLU {
 }
 
 impl<T: Float> Function<T> for ReLU {
+    fn name(&self) -> String {
+        String::from("ReLU")
+    }
+
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);

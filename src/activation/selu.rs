@@ -24,7 +24,7 @@ pub struct SELU<T: Float> {
 }
 
 impl<T: Float> SELU<T> {
-    fn new(_datatype_number: T) -> Self {
+    pub fn new(_datatype_number: T) -> Self {
         let alpha: T = T::selu_alpha(T::default());
         let lambda: T = T::selu_lambda(T::default());
         Self { alpha, lambda }
@@ -60,6 +60,10 @@ impl<T: Float> From<(T, T)> for SELU<T> {
 }
 
 impl<T: Float> Function<T> for SELU<T> {
+    fn name(&self) -> String {
+        String::from("SELU")
+    }
+
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);

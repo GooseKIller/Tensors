@@ -8,8 +8,6 @@ use crate::linalg::{Matrix, Tensor};
 macro_rules! impl_mul_for_types_vec {
     ($($type:ty),*) => {
         $(
-			impl Num for $type {}
-
             impl Mul<Vector<$type>> for $type {
                 type Output = Vector<$type>;
 

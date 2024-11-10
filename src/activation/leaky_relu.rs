@@ -24,7 +24,7 @@ pub struct LeakyReLU<T:Float>{
 }
 
 impl<T:Float> LeakyReLU<T> {
-    fn new(_:T) -> Self{
+    pub fn new(_:T) -> Self{
         let two = T::from_usize(2);
         let ten = T::from_usize(10);
         Self{
@@ -60,6 +60,9 @@ impl<T:Float> From<T> for LeakyReLU<T>  {
 }
 
 impl<T:Float> Function<T> for LeakyReLU<T>{
+    fn name(&self) -> String {
+        String::from("LeakyReLU")
+    }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row*cols);

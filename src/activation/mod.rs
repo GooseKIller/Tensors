@@ -38,6 +38,9 @@ use crate::Float;
 ///
 /// All activation function must implement this trait Function
 pub trait Function<T: Float>: Any{
+    /// All functions must have name
+    /// to save architecture names
+    fn name(&self) -> String;
 
     /// Rust does not have similar thing like \_\_call__ in Python
     ///
@@ -54,10 +57,11 @@ pub trait Function<T: Float>: Any{
     fn get_data(&self) -> Option<Matrix<T>> {
         None
     }
-    fn get_bias(&self) -> Option<Matrix<T>>{
-        None
-    }
 
-    fn set_data(&mut self, data:Matrix<T>){}
-    fn set_bias(&mut self, new_bias:Matrix<T>){}
+    fn set_data(&mut self, _data:Matrix<T>){}
+
+    fn get_weights(&self) -> Option<Matrix<T>> {None}
+
+    fn get_bias(&self) -> Option<Matrix<T>> {None}
+    fn is_bias(&self) -> bool {false}
 }

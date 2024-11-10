@@ -30,9 +30,20 @@ pub trait Num:
     Display +
     Debug +
     Sync +
-    Send + 'static
+    Send +
+    'static
+
 {
 }
+
+macro_rules! impl_num_for_types {
+    ($($type:ty),*) => {
+        $(
+        impl Num for $type {}
+        )*
+    };
+}
+impl_num_for_types!(i16, i32, i64, i128, f32, f64);
 
 /// Float type
 ///
@@ -44,7 +55,7 @@ Num{
     fn one() -> Self;
     fn sqrt(self) -> Self;
     fn exp(self) -> Self;
-
+    fn ln(self) -> Self;
     fn powf(self, n:Self) -> Self;
     fn abs(self) -> Self;
     fn neg(self) -> Self;
@@ -55,15 +66,19 @@ Num{
 
     fn selu_alpha(self) -> Self;
 
+    fn from_f64(value: f64) -> Self;
     fn from_usize(value: usize) -> Self;
+    
+    fn from_str(value: &str) -> Self;
 }
 
 impl Float for f32{
     fn one() -> Self {1f32}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self { self.exp() }
-    fn abs(self) -> Self { self.abs() }
+    fn ln(self) -> Self { self.ln() }
     fn powf(self, n: f32) -> Self { self.powf(n) }
+    fn abs(self) -> Self { self.abs() }
     fn neg(self) -> Self { Neg::neg(self) }
     fn to_f64(self) -> f64 {
         self as f64
@@ -76,15 +91,24 @@ impl Float for f32{
     fn selu_alpha(self) -> Self {
         1.67326f32
     }
+    fn from_f64(value: f64) -> Self {
+        value as f32
+    }
+
     fn from_usize(value: usize) -> Self {value as f32}
+
+    fn from_str(value: &str) -> Self {
+        value.parse::<f32>().unwrap()
+    }
 }
 
 impl Float for f64{
     fn one() -> Self {1f64}
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self {self.exp()}
-    fn abs(self) -> Self { self.abs() }
+    fn ln(self) -> Self { self.ln() }
     fn powf(self, n: f64) -> Self { self.powf(n) }
+    fn abs(self) -> Self { self.abs() }
     fn neg(self) -> Self {Neg::neg(self)}
     fn to_f64(self) -> f64 {
         self
@@ -97,9 +121,43 @@ impl Float for f64{
         1.6732632423543772848170429916717f64
     }
 
-    fn from_usize(value: usize) -> Self {value as f64}
-}
+    fn from_f64(value: f64) -> Self {
+        value
+    }
 
+    fn from_usize(value: usize) -> Self {value as f64}
+    fn from_str(value: &str) -> Self {
+        value.parse::<f64>().unwrap()
+    }
+}
+/*
+macro_rules! impl_float_for_types {
+    ($($type:ty),*) => {
+        $(
+        impl Float for $type {
+            fn one() -> Self {
+                1 as $type
+            }
+            fn sqrt(self) -> Self { self.sqrt() }
+            fn exp(self) -> Self {self.exp()}
+            fn abs(self) -> Self { self.abs() }
+            fn powf(self, n: $type) -> Self { self.powf(n) }
+            fn neg(self) -> Self {Neg::neg(self)}
+
+            fn selu_lambda(self) -> Self {
+                1.0507009873554804934193349852946 as $type
+            }
+
+            fn selu_alpha(self) -> Self {
+                1.6732632423543772848170429916717 as $type
+            }
+
+            fn from_usize(value: usize) -> Self {value as $type}
+        }
+        )*
+    };
+}
+*/
 pub struct DataType;
 
 impl DataType {

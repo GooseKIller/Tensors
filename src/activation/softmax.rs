@@ -32,6 +32,9 @@ impl SoftMax{
 }
 
 impl<T:Float> Function<T> for SoftMax {
+    fn name(&self) -> String {
+        String::from("SoftMax")
+    }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let mut data:Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
         for i in 0..matrix.rows{

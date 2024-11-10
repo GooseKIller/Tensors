@@ -12,15 +12,15 @@ impl<T: Float> SGD<T> {
             learning_rate
         }
     }
-    pub fn change_learning_rate(&mut self, new_learning_rate: T) {
-        self.learning_rate = new_learning_rate;
-    }
 }
 
 impl<T: Float> Optimizer<T> for SGD<T> {
     fn step(&mut self, weights: &mut Matrix<T>, gradients: &Matrix<T>) {
         let a = gradients.clone() * self.learning_rate;
         *weights = weights.clone() - &a;
+    }
+    fn change_learning_rate(&mut self, new_learning_rate: T) {
+        self.learning_rate = new_learning_rate;
     }
 }
 

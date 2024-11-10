@@ -8,9 +8,11 @@
 
 mod mse;
 mod mape;
+mod crossentropy;
 
 pub use mse::*;
 pub use mape::*;
+pub use crossentropy::*;
 use crate::Float;
 use crate::linalg::Matrix;
 

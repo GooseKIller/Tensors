@@ -12,7 +12,7 @@ use crate::Float;
 pub struct Sigmoid;
 
 impl Sigmoid {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self
     }
 
@@ -28,6 +28,10 @@ impl Sigmoid {
 }
 
 impl<T: Float> Function<T> for Sigmoid {
+    fn name(&self) -> String {
+        String::from("Sigmoid")
+    }
+
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);

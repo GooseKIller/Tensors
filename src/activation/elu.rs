@@ -55,6 +55,9 @@ impl<T: Float> From<T> for ELU<T> {
 }
 
 impl<T: Float> Function<T> for ELU<T> {
+    fn name(&self) -> String {
+        String::from("ELU")
+    }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
         let mut data = Vec::with_capacity(row * cols);
