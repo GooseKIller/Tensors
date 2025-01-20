@@ -16,6 +16,6 @@ use crate::Float;
 use crate::linalg::Matrix;
 
 pub trait Optimizer<T: Float> {
-    fn step(&mut self, weights: &mut Matrix<T>, gradients: &Matrix<T>);
+    fn step(&mut self, weights: &mut Matrix<T>, gradients: &Matrix<T>, input_data: &Matrix<T>);
     fn change_learning_rate(&mut self, new_learning_rate: T);
 }

@@ -17,13 +17,11 @@ impl Sigmoid {
     }
 
     fn num_fun<T: Float>(&self, num: T) -> T {
-        let one: T = 1.into();
-        one / (one - num.exp())
+        T::one() / (T::one() + (-num).exp())
     }
 
     fn num_der<T: Float>(&self, num: T) -> T {
-        let one: T = 1.into();
-        num.exp() / ((num.exp() + one) * (num.exp() + one))
+        num.exp() / (num.exp() + T::one()).powf(T::from(2))
     }
 }
 

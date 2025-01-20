@@ -7,7 +7,7 @@ use rayon::prelude::*;
 ///
 /// # Formula:
 ///```math
-///  MSE(ŷ, y ) = \frac{1}{n} \sum_{i=1}^{n} (ŷ_i - y_i)^2
+///  MSE(ŷ, y ) = \frac{1}{n} \sum_{i=1}^{n} (y_i - ŷ_i)^2
 ///```
 /// Where $`ŷ_i`$ predicted and $`y_i`$ expected value
 pub struct MSE<T: Float>(T);
@@ -23,7 +23,7 @@ impl<T: Float> Loss<T> for MSE<T> {
             panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.size(), target.size())
         }
         let length = output.data.len();
-        let difference = output.clone() - target;
+        let difference = target - output;
         let mut total_loss = T::default();
         for i in 0..difference.data.len() {
             total_loss += difference.data[i] * difference.data[i];
@@ -33,7 +33,7 @@ impl<T: Float> Loss<T> for MSE<T> {
 
     /// # Formula
     ///```math
-    ///  \frac{2}{n} (ŷ_i - y_i)
+    ///  \frac{2}{n} (y_i - ŷ_i)
     ///```
     /// Where $`n`$ is length
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
@@ -41,10 +41,10 @@ impl<T: Float> Loss<T> for MSE<T> {
             panic!("!!!Size of output matrix and target must be equal!!!")
         }
         let length = output.data.len();
-        let diff = output.clone() - target;
+        let diff = target - output;
         let mut grad = vec![T::default(); length];
         grad.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = (T::from_usize(2) * diff.data[i]) / (T::from_usize(length))
+            *x = -(T::from_usize(2) * diff.data[i]) / (T::from_usize(length))
         });
         Matrix::new(grad, diff.rows, diff.cols)
     }

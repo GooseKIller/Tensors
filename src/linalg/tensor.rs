@@ -12,13 +12,8 @@ pub struct Tensor<T:Num>{
 
 impl<T:Num> Tensor<T>{
     pub fn new(data:Vec<T>, shape:Vec<usize>) -> Self{
-        let mut mul = 1;
-        for i in &shape{
-            mul *= i;
-        }
-        if data.len() != mul{
-            panic!("!!!Inconsistent data and dimensions combination for tensor!!!")
-        }
+        let mul = shape.iter().product::<usize>();
+        assert_eq!(data.len(), mul, "!!!Inconsistent data and dimensions combination for tensor!!!");
         Self{
             data,
             shape
@@ -36,24 +31,54 @@ impl<T:Num> Tensor<T>{
             shape
         }
     }
+
+    /// !!NOT FINISHED YET!!
+    pub fn kronecker(&self, other:Tensor<T>) -> Tensor<T>{
+        let new_shape: Vec<usize> = self.shape.iter()
+            .zip(other.shape.clone()).map(|(&s, o)| s*o).collect();
+
+        let new_size = new_shape.iter().product::<usize>();
+
+        let mut ans = vec![T::default(); new_size];
+
+        ans.par_iter_mut().enumerate().for_each(|(index, x)| {
+            let mut a_indices = vec![0; self.shape.len()];
+            let mut b_indices = vec![0; other.shape.len()];
+
+            let mut temp_index = index;
+            for dim in (0..self.shape.len()).rev() {
+                a_indices[dim] = temp_index % self.shape[dim];
+                temp_index /= self.shape[dim];
+
+                b_indices[dim] = temp_index % other.shape[dim];
+                temp_index /= other.shape[dim];
+            }
+            let a_value = self[&a_indices];
+            let b_value = other[&b_indices];
+
+            *x = a_value * b_value;
+        });
+
+        Tensor {
+            data: ans,
+            shape: new_shape,
+        }
+    }
 }
 
 impl<T:Num> Index<&[usize]> for Tensor<T>{
     type Output = T;
     fn index(&self, index: &[usize]) -> &Self::Output {
-        if self.shape.len() != index.len(){
-            panic!("!!!Amount of shape and index does not equals \n\
-             Shape size is {}. Index size is {}.!!!", self.shape.len(), index.len())
-        }
+        assert_eq!(self.shape.len(), index.len(),
+                   "!!!Amount of shape and index does not equal \nShape size is {}. Index size is {}.!!!",
+                   self.shape.len(), index.len());
+
         let mut linear_index = 0;
         for i in 0..index.len() {
-            if index[i] > self.shape[i] {
-                panic!("!!!Index out of bounds.\n\
-                 Shape: {:?} Index: {:?}!!!",
-                       self.shape,
-                       index
-                )
-            }
+            assert!(index[i] <= self.shape[i],
+                    "!!!Index out of bounds.\nShape: {:?} Index: {:?}!!!",
+                    self.shape,
+                    index);
             linear_index = linear_index * self.shape[i] + index[i];
         }
         &self.data[linear_index]
@@ -309,5 +334,13 @@ mod test{
         assert_eq!(ans, tr.clone()*2);
         tr *= 2;
         assert_eq!(ans, tr)
+    }
+
+    #[test]
+    fn kron(){
+        let a = Tensor::new(vec![1,2,3,4], vec![2,2]);
+        let b = Tensor::new(vec![0,5,6,7], vec![2,2]);
+
+        println!("{:?}", a.kronecker(b));
     }
 }

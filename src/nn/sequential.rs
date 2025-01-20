@@ -44,93 +44,51 @@ impl<T:Float> Sequential<T> {
         output
     }
 
+    /// Will return Loss and train Network
     pub fn train<L: Loss<T>, O: Optimizer<T>>(
         &mut self,
         input: Matrix<T>,
         target: Matrix<T>,
         optimizer: &mut O,
         loss_fn: &L,
-    ) {/*
+    ) -> T{
+        let mut outputs = vec![input.clone()];
+        for layer in &self.layers {
+            let output = layer.call(outputs.last().unwrap().clone());
+            outputs.push(output);
+        }
 
-        // forward pass
-        let pred = self.forward(input.clone());
-
-        let mut grad = loss_fn.gradient(&pred, &target);
-
-        for layer in self.layers.iter().rev(){
+        // TODO(Add DGC(Dynamic Gradient Controller)) if is NaN then decrease DGC
+        let loss = loss_fn.call(&outputs.last().unwrap(), &target);
+        let mut deltas = vec![loss_fn.gradient(&outputs.last().unwrap(), &target)];
+        let mut delta = deltas.last().unwrap().clone();
+        for (i, layer) in self.layers.iter().enumerate().skip(1).rev(){
             if layer.is_linear(){
-                if layer.is_bias(){
+                delta = layer.derivative(delta);
+            } else {
+                let matrix = layer.derivative(outputs[i].clone());
+                delta = delta.hadamard(&matrix);
+            }
+            deltas.push(delta.clone());
+        }
 
-                } else {
-
+        for ((layer, delta), input_data) in self.layers
+            .iter_mut().zip(deltas
+                .iter().rev()).zip(outputs
+                    .iter().take(outputs.len() - 1)) {
+            if let Some(mut weight) = layer.get_data() {
+                if layer.is_bias() {
+                    let mut changed_data = input_data.clone();
+                    changed_data.add_column(vec![T::one(); input_data.rows]);
+                    optimizer.step(&mut weight, delta, &changed_data);
+                }else {
+                    optimizer.step(&mut weight, delta, input_data);
                 }
-            } else {
-                grad = grad * &layer.derivative(input.clone());
+                layer.set_data(weight);
             }
-        }*/
-
-        // forward pass
-        let mut activations = vec![input.clone()];
-        for layer in &self.layers{
-            let output = layer.call(activations.last().unwrap().clone());
-            activations.push(output);
         }
 
-        //loss function
-        let loss_gradient = loss_fn.gradient(
-            activations.last().unwrap(),
-            &target
-        );
-
-
-        let mut curr_gradient = loss_gradient;
-
-        for (i, layer) in self.layers.iter_mut().enumerate().rev(){
-            let activation = if layer.is_linear() {
-                &activations[i]
-            } else {
-                &layer.derivative(activations[i].clone())
-            };
-
-            // 1. Calculate the gradients of the weights
-            // Gradients of weights = activation * gradient
-            let weight_gradient = activation.clone().transpose() * &curr_gradient; // (num_inputs, num_outputs)
-
-            // Gradient Clipping
-            let max_norm = T::one();
-            let norm = weight_gradient.clone().norm(T::from(2));
-            if norm > max_norm{
-                let scaling_factor = max_norm / norm;
-                curr_gradient *= scaling_factor;
-            }
-
-            let gradient = if layer.is_bias() {
-                // 2. Calculate the gradients of the bias
-                // bias gradients = the sum of the gradient across the rows
-                let bias_gradient = curr_gradient.sum_rows(); // (1, num_outputs)
-
-                Matrix::new(
-                    [weight_gradient.data, bias_gradient.data].concat(),
-                    weight_gradient.rows + 1,
-                    weight_gradient.cols
-                )
-            } else {
-                weight_gradient
-            };
-
-            // 3. Updating weights and offsets
-            if let Some(mut data) = layer.get_data() {
-                optimizer.step(&mut data, &gradient);
-                layer.set_data(data);
-            }
-
-            // 4. Calculate the gradient for the previous layer
-            // Gradient for the previous layer = current gradient * transposed weights
-            if let Some(weights) = layer.get_weights() { // (num_inputs, num_outputs)
-                curr_gradient = &curr_gradient * &weights.transpose(); // (num_outputs, num_inputs)
-            }
-
-        }
+        return loss;
     }
 
     pub fn save(&self, name: &str) -> io::Result<()>{
@@ -210,130 +168,40 @@ impl<T:Float> Sequential<T> {
 
 #[cfg(test)]
 mod test{
-    use std::io;
-    use crate::activation::{Function, ReLU};
+    use crate::activation::{Function, Sigmoid};
     use crate::linalg::Matrix;
-    use crate::loss::{Loss, MSE};
+    use crate::loss::{SSE};
     use crate::{DataType, matrix};
     use crate::nn::Linear;
     use crate::nn::sequential::{Sequential};
     use crate::optim::SGD;
 
-
     #[test]
-    fn saving_model() -> io::Result<()>{
-        let layers: Vec<Box<dyn Function<f64>>> = vec![
-            Box::new(Linear::new(1, 64, true)),
-            Box::new(ReLU::new()),
-            Box::new(Linear::new(64, 1, true)),
-        ];
-        let model = Sequential::new(layers);
+    fn learn_xor_test() {
+        let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+        let output = matrix![[0.0], [1.0], [1.0], [0.0]];
 
-        model.save("model")?;
-        println!("{}", model.forward(matrix![[1f64]]));
-
-        Ok(())
-    }
-
-    #[test]
-    fn loading_model() -> io::Result<()>{
-        let layers: Vec<Box<dyn Function<f64>>> = vec![
-            Box::new(Linear::new(1, 64, true)),
-            Box::new(ReLU::new()),
-            Box::new(Linear::new(64, 1, true)),
-        ];
-        let mut model = Sequential::new(layers);
-        model.load("model")?;
-        println!("{}", model.forward(matrix![[1f64]]));
-        Ok(())
-    }
-
-    #[test]
-    fn learning_multilayer_nn(){
-        let n = 100;
-        let m = 3;
-
-        //training data
-        let mut x = vec![vec![0f64; m]; n];
-        let mut y = vec![0f64; n];
-
-        for i in 0..n {
-            let i_num = rand::random::<f64>();
-            let j_num = rand::random::<f64>();
-            x[i] = vec![i_num, 1f64 - i_num, j_num];
-            y[i] = 2_f64 * i_num + 5_f64 * (1f64 - i_num) + 8_f64 * j_num;
-        }
-
-
-        let layers: Vec<Box<dyn Function<f64>>> = vec![
-            Box::new(Linear::new(3, 2, true)),
-            Box::new(ReLU::new()),
+        let layers: Vec<Box< dyn Function<f32>>> = vec![
+            Box::new(Linear::new(2, 2, true)),
+            Box::new(Sigmoid::new()),
             Box::new(Linear::new(2, 1, true)),
+            Box::new(Sigmoid::new())
         ];
         let mut model = Sequential::new(layers);
-
-        let loss = MSE::new(DataType::f64());
-        let mut optim = SGD::new(0.1);//, 0.9, 0.999, 1e-8);
-
-
-        let mut min_loss = loss.call(
-            &model.forward(Matrix::from(x[0].clone())),
-            &Matrix::from_num(y[0],1,1)
-        );
-        for _ in 0..100{
-            for i in 0..n{
-                let x_batch = Matrix::from(x[i].clone());
-                let y_batch = Matrix::from_num(y[i].clone(),1,1);
-
-                let output = model.forward(x_batch.clone());
-                if loss.call(&output, &y_batch) < 0.001{
-                    break;
-                }
-
-                model.train(
-                    x_batch,
-                    y_batch,
-                    &mut optim,
-                    &loss
-                )
-
-            }
-            min_loss = min_loss.min(loss.call(
-                &model.forward(Matrix::from(x[0].clone())),
-                &Matrix::from_num(y[0],1,1)
-            ));
-        }
-
-        println!("MIN Loss{}", min_loss);
-
-        println!("After: {}", model.forward(
-            Matrix::from(x[0].clone())
-        ));
-        println!("EXCEPTED: {}", y[0])
-    }
-
-
-    #[test]
-    fn learn(){
-        let layers: Vec<Box<dyn Function<f64>>> = vec![
-            Box::new(Linear::new(1, 3, true)),
-            Box::new(ReLU::new()),
-            Box::new(Linear::new(3, 1, true)),
-        ];
-        let mut model = Sequential::new(layers);
-        let mut oprim = SGD::new(0.1);
-        let loss_fn = MSE::new(DataType::f64());
-        let mut i = 0;
-        while loss_fn.call(&model.forward(matrix![[10000.0]]), &matrix![[-125.0]]) > 1e-3 || i != 200{
-            i += 1;
-            model.train(
-                matrix![[1000.0]],
-                matrix![[-125.0]],
-                &mut oprim,
-                &loss_fn
+        let mut optim = SGD::new(1f32);
+        let loss = SSE::new(DataType::f32());
+        println!("{}", model.forward(input.clone()));
+        for i in 0..10000{
+            let loss = model.train(
+                input.clone(),
+                output.clone(),
+                &mut optim,
+                &loss
             );
-            println!("{}", model.forward(matrix![[1000.0]]));
+            if i % 1000 == 0 {
+                println!("{loss}");
+            }
         }
-        println!("{i}");
+        println!("{}", model.forward(input));
     }
 }

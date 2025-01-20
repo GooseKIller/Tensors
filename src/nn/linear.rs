@@ -19,10 +19,10 @@ impl<T:Float> Linear<T>
 
         // Xavier method
         let mut data = Vec::with_capacity(row * col);
-        let limit = (T::from_usize(6) / T::from_usize(row + col)).sqrt(); // Для равномерного распределения
+        let limit = (T::from_usize(6) / T::from_usize(row + col)).sqrt();//sqrt(6) / sqrt(n_i + n_i+1)
 
         for _ in 0..(col * row) {
-            let value = random::<T>() * T::from(2) * limit - limit; // Генерация значений в диапазоне [-limit, limit]
+            let value = random::<T>() * T::from(2) * limit - limit; // [-limit, limit)
             data.push(value);
         }
 
@@ -160,8 +160,12 @@ impl<T:Float> Function<T> for Linear<T> {
     }
 
     /// not real derivative just delta calculating
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {// not real derivative just calculating gradients
-        &matrix * &self.get_weights().unwrap().transpose()
+    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
+        if self.bias {
+            let ans = &matrix * &self.matrix.transpose();
+            return ans.rem_col(ans.cols-1);
+        }
+        &matrix * &self.matrix.transpose()
     }
 
     fn is_linear(&self) -> bool{

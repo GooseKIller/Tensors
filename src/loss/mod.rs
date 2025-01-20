@@ -2,6 +2,8 @@
 //!
 //! for evaluating model performance
 //!
+//! [SSE] - Sum of squared errors
+//!
 //! [MSE] - Mean square error
 //!
 //! [MAPE] - Mean absolute percentage error
@@ -10,8 +12,11 @@ mod mse;
 mod mape;
 mod crossentropy;
 
+mod sse;
+
 pub use mse::*;
 pub use mape::*;
+pub use sse::*;
 pub use crossentropy::*;
 use crate::Float;
 use crate::linalg::Matrix;

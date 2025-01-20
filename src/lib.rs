@@ -7,6 +7,7 @@ pub mod activation;
 pub mod nn;
 pub mod loss;
 pub mod optim;
+pub mod utils;
 
 /// Numeric type
 ///
@@ -53,6 +54,8 @@ impl_num_for_types!(i16, i32, i64, i128, f32, f64);
 pub trait Float:
 Num{
     fn one() -> Self;
+    /// 1 for positive 0 for 0 and -1 for negative
+    fn sign(self) -> Self;
     fn sqrt(self) -> Self;
     fn exp(self) -> Self;
     fn ln(self) -> Self;
@@ -70,16 +73,55 @@ Num{
     fn from_usize(value: usize) -> Self;
     
     fn from_str(value: &str) -> Self;
+    fn cos(self) -> Self;
+    fn pi() -> Self;
+}
+
+macro_rules! impl_some_float_for_types {
+    ($($type:ty),*) => {
+        $(
+            fn one() -> Self {1.0}
+            fn pi() -> Self {3.14159}
+            fn sign(self) -> Self {
+                if self > Self::default() {
+                    1.0
+                } else if self == Self::default() {
+                    0.0
+                } else {
+                    -1.0
+                }
+            }
+            fn sqrt(self) -> Self { self.sqrt() }
+            fn cos(self) -> Self {self.cos()}
+            fn exp(self) -> Self {self.exp()}
+            fn ln(self) -> Self { self.ln() }
+            fn abs(self) -> Self { self.abs() }
+            fn powf(self, n: $type) -> Self { self.powf(n) }
+            fn neg(self) -> Self {Neg::neg(self)}
+        )*
+    };
 }
 
 impl Float for f32{
+    impl_some_float_for_types!(f32);
+    /*
     fn one() -> Self {1f32}
+    fn sign(self) -> Self {
+        if self > Self::default() {
+            1.0
+        } else if self == Self::default() {
+            0.0
+        } else {
+            -1.0
+        }
+    }
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self { self.exp() }
     fn ln(self) -> Self { self.ln() }
     fn powf(self, n: f32) -> Self { self.powf(n) }
     fn abs(self) -> Self { self.abs() }
-    fn neg(self) -> Self { Neg::neg(self) }
+    fn neg(self) -> Self { Neg::neg(self) }*/
+
     fn to_f64(self) -> f64 {
         self as f64
     }
@@ -103,22 +145,34 @@ impl Float for f32{
 }
 
 impl Float for f64{
-    fn one() -> Self {1f64}
+    impl_some_float_for_types!(f64);
+    /*
+    fn one() -> Self {1.0}
+    fn sign(self) -> Self {
+        if self > Self::default() {
+            1.0
+        } else if self == Self::default() {
+            0.0
+        } else {
+            -1.0
+        }
+    }*/
+    /*
     fn sqrt(self) -> Self { self.sqrt() }
     fn exp(self) -> Self {self.exp()}
     fn ln(self) -> Self { self.ln() }
     fn powf(self, n: f64) -> Self { self.powf(n) }
     fn abs(self) -> Self { self.abs() }
-    fn neg(self) -> Self {Neg::neg(self)}
+    fn neg(self) -> Self {Neg::neg(self)}*/
     fn to_f64(self) -> f64 {
         self
     }
     fn selu_lambda(self) -> Self {
-        1.0507009873554804934193349852946f64
+        1.050700f64
     }
 
     fn selu_alpha(self) -> Self {
-        1.6732632423543772848170429916717f64
+        1.673263f64
     }
 
     fn from_f64(value: f64) -> Self {
@@ -130,34 +184,8 @@ impl Float for f64{
         value.parse::<f64>().unwrap()
     }
 }
-/*
-macro_rules! impl_float_for_types {
-    ($($type:ty),*) => {
-        $(
-        impl Float for $type {
-            fn one() -> Self {
-                1 as $type
-            }
-            fn sqrt(self) -> Self { self.sqrt() }
-            fn exp(self) -> Self {self.exp()}
-            fn abs(self) -> Self { self.abs() }
-            fn powf(self, n: $type) -> Self { self.powf(n) }
-            fn neg(self) -> Self {Neg::neg(self)}
 
-            fn selu_lambda(self) -> Self {
-                1.0507009873554804934193349852946 as $type
-            }
-
-            fn selu_alpha(self) -> Self {
-                1.6732632423543772848170429916717 as $type
-            }
-
-            fn from_usize(value: usize) -> Self {value as $type}
-        }
-        )*
-    };
-}
-*/
+///Structure to improve readability
 pub struct DataType;
 
 impl DataType {
