@@ -1,3 +1,37 @@
+//!
+//! # Tensors
+//!
+//! Tensors is a lightweight machine learning library in Rust. It provides a simple and efficient way to create and train machine learning models with minimal dependencies.
+//! ## Dependencies
+//! The library uses the following dependencies:
+//! - [rayon](https://crates.io/crates/rayon) - for parallel computations on CPU.
+//! - [rand](https://crates.io/crates/rand) - for random number generation.
+//! - [serde](https://crates.io/crates/serde) - for saving models.
+//! - [serde_json](https://crates.io/crates/serde_json) - for loading models.
+//!
+//! ## Example
+//! ```rust
+//! use tensors::activation::Function;
+//! use tensors::DataType;
+//! use tensors::linalg::{Matrix, Vector};
+//! use tensors::nn::{Linear, Sequential};
+//! use tensors::optim::Adam;
+//! use tensors::loss::MSE;
+//! use tensors::loss::Loss;
+//!
+//! let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
+//! let y:Matrix<f32> = 8.0 * &x - 10.0;
+//!
+//! let layers: Vec<Box< dyn Function<f32>>> = vec![Box::new(Linear::new(1, 1, true))];
+//! let mut optim = Adam::new(0.001, &layers);
+//! let mut model = Sequential::new(layers);
+//! let loss = MSE::new(DataType::f32());
+//!
+//! for _ in 0..1000 {
+//!     model.train(x.transpose(), y.transpose(), &mut optim, &loss);
+//! }
+//! ```
+//! Thanks for using Tensors!!!
 use std::fmt::{Debug, Display};
 use std::cmp::PartialOrd;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};

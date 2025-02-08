@@ -64,6 +64,57 @@ impl<T:Num> Tensor<T>{
             shape: new_shape,
         }
     }
+
+    pub fn convolve(&self, kernel: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(kernel.shape, kernel.shape,
+            "!!!Kernel dimensions must be less than or equal to input tensor dimensions.!!!");
+
+        let output_shape: Vec<usize> = self.shape.iter()
+            .zip(kernel.shape.iter())
+            .map(|(input, kernel)| input - kernel + 1)
+            .collect();
+
+        let output_size = output_shape.iter().product::<usize>();
+        let mut output_data = vec![T::default(); output_size];
+
+        output_data.par_iter_mut().enumerate().for_each(|(output_index, output_value)| {
+            let mut sum = T::default();
+            let output_coords = self.index_to_coords(output_index, &output_shape);
+
+            for kernel_index in 0..kernel.data.len() {
+                let kernel_coords = kernel.index_to_coords(kernel_index, &kernel.shape);
+                let input_coords: Vec<usize> = output_coords.iter()
+                    .zip(kernel_coords.iter())
+                    .map(|(&o, &k)| o + k)
+                    .collect();
+
+                let input_index = self.coords_to_index(&input_coords);
+                sum += self.data[input_index] * kernel.data[kernel_index];
+            }
+
+            *output_value = sum;
+        });
+
+        Tensor {
+            data: output_data,
+            shape: output_shape,
+        }
+    }
+
+    fn index_to_coords(&self, index: usize, shape: &[usize]) -> Vec<usize> {
+        let mut coords = Vec::new();
+        let mut idx = index;
+        for &dim in shape.iter().rev() {
+            coords.push(idx % dim);
+            idx /= dim;
+        }
+        coords.reverse();
+        coords
+    }
+
+    fn coords_to_index(&self, coords: &[usize]) -> usize {
+        coords.iter().enumerate().map(|(dim, &coord)| coord * self.shape[dim]).sum()
+    }
 }
 
 impl<T:Num> Index<&[usize]> for Tensor<T>{
@@ -82,17 +133,6 @@ impl<T:Num> Index<&[usize]> for Tensor<T>{
             linear_index = linear_index * self.shape[i] + index[i];
         }
         &self.data[linear_index]
-        /*
-        // Mixtral code
-        for (i, &dim) in self.shape.iter().enumerate() {
-            if index[i] >= dim {
-                panic!(
-                    "!!!Index out of bounds. Shape: {:?} Index: {:?}!!!",
-                    self.shape, index
-                )
-            }
-            linear_index = linear_index * dim + index[i];
-        }*/
     }
 }
 
@@ -342,5 +382,32 @@ mod test{
         let b = Tensor::new(vec![0,5,6,7], vec![2,2]);
 
         println!("{:?}", a.kronecker(b));
+    }
+
+    #[test]
+    fn conv() {
+        /*
+        let input_data = vec![
+            1, 2, 3, 0,
+            0, 1, 2, 3,
+            1, 0, 1, 2,
+            2, 3, 0, 1,
+        ];
+        let input_shape = vec![4, 4];
+        let input_tensor = Tensor::new(input_data, input_shape);
+
+        // Создаем ядро свертки 2x2
+        let kernel_data = vec![
+            1, 0,
+            0, 1,
+        ];
+        let kernel_shape = vec![2, 2];
+        let kernel_tensor = Tensor::new(kernel_data, kernel_shape);
+
+        // Применяем свертку
+        let output_tensor = input_tensor.convolve(&kernel_tensor);
+
+        println!("Output Tensor: {:?}", output_tensor);
+        */
     }
 }

@@ -2,8 +2,13 @@ use crate::activation::Function;
 use crate::linalg::Matrix;
 use crate::Float;
 
-/// Scaled Exponential Linear Unit
-/// # Defined as:
+/// Scaled Exponential Linear Unit (SELU).
+///
+/// Applies the SELU activation function element-wise.
+/// SELU is defined with a default scale parameter `λ` and a default alpha parameter `α`.
+///
+/// # Mathematical Definition
+/// For an input `x`, the SELU function is defined as:
 ///```math
 /// SELU(x) = \left\{
 /// \begin{array}{ll}
@@ -13,11 +18,12 @@ use crate::Float;
 /// \right.
 /// ```
 ///
-/// By default,
+/// By default, the parameters are set to:
+/// - α = 1.67326
+/// - λ = 1.0507
 ///
-/// α = 1.67326
-///
-/// λ = 1.0507
+/// # See Also
+ /// - [velog.io: Scaled Exponential Linear Unit](https://velog.io/@greensox284/Activation-Scaled-Exponential-Linear-Unit-SELU)
 pub struct SELU<T: Float> {
     alpha: T,
     lambda: T,

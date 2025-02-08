@@ -35,23 +35,27 @@ macro_rules! matrix {
     };
 }
 
-///reference by [skyl4b](https://github.com/TheAlgorithms/Rust/blob/master/src/math/matrix_ops.rs)
+/// A `Matrix` represents a two-dimensional mathematical structure consisting of rows and columns,
+/// used for various mathematical operations, including linear algebra.
 ///
-///Also since the matrix is implemented using vector, it is not simple struct, then all
-///mathematical methods are realized without borrowing
+/// Reference: [skyl4b](https://github.com/TheAlgorithms/Rust/blob/master/src/math/matrix_ops.rs)
 ///
-///So you should use & with the second part of calculation
+/// The `Matrix` struct is implemented using a vector, which means it is not a simple struct.
+/// As a result, all mathematical operations are implemented without borrowing.
+///
+/// When performing operations, ensure to use a reference for the second operand:
+///
 /// # Example
-///
-/// ```
+/// ```rust
 /// use tensors::linalg::Matrix;
 ///
 /// let a = Matrix::from_num(0, 2, 2);
 /// let b = Matrix::from_num(1, 2, 2);
 ///
-/// a + &b; // correct
-/// // a + b;  // incorrect
+/// a + &b; // Correct
+/// // a + b;  // Incorrect
 /// ```
+///
 #[derive(PartialEq, Eq, Debug)]
 pub struct Matrix<T: Num> {
     pub(crate) data: Vec<T>,
@@ -190,6 +194,7 @@ impl<T: Num> Matrix<T> {
         self.cols.clone()
     }
 
+    /// Returns sum of all elements of matrix
     pub fn sum(self) -> T {
         let mut sum = T::default();
         for i in self.data {
@@ -496,6 +501,32 @@ impl<T: Num> Matrix<T> {
         }
     }
 
+    /// Applies a binary function to corresponding elements of two matrices, producing a new matrix.
+    ///
+    /// /// # Example
+    /// ```rust
+    /// use tensors::linalg::Matrix;
+    ///
+    /// let a = Matrix::from_num(1, 2, 2);
+    /// let b = Matrix::from_num(2, 2, 2);
+    /// let result = a.zip_with(&b, |x, y| x + y);
+    /// ```
+    pub fn zip_with<F>(&self, other: &Matrix<T>, f:F) -> Matrix<T>
+        where F: Fn(T, T) -> T + Sync + Send {
+        let new_data = self.data.clone()
+            .par_iter_mut()
+            .enumerate()
+            .map(|(i, x)| {
+                f(*x, other.data[i])
+            }).collect();
+        Matrix {
+            data: new_data,
+            rows: self.rows,
+            cols: self.cols,
+        }
+    }
+
+    /// Function for
     pub(crate) fn data_as_string(&self) -> String{
         self.data.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(" ")
     }
@@ -1029,6 +1060,15 @@ mod tests {
     use crate::linalg::matrix::*;
     use crate::{vector, DataType};
     use std::time::Instant;
+
+
+    #[test]
+    fn mat_and_num() {
+        let a = matrix![[1, 2], [1, 2]];
+        let b = matrix![[2, 1], [3, 4]];
+        println!("{}", 1 * &a * &b);
+    }
+
 
     #[test]
     fn calc_num_test(){

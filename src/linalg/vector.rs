@@ -40,26 +40,27 @@ macro_rules! vector {
 	};
 }
 
-/// Mathematical vector.
+/// A `Vector` represents a one-dimensional mathematical structure used to store a sequence of elements.
 ///
-/// Most of the functions are implemented:
-/// Addition, Subtraction, Multiplication, Scalar product
+/// # Example
+/// ```rust
+/// use tensors::linalg::Vector;
 ///
-/// Addition/subtraction/multiplication, works according to the principle {x_1+y_1, x_2+y_2, x_3+y_3}
+/// let v1 = Vector::from_num(1, 3);
+/// let v2 = Vector::from_num(2, 3);
+///
+/// let result = v1 + &v2; // Correct
+/// // let incorrect_result = v1 + v2; // Incorrect
+/// ```
+///
 #[derive(PartialEq, Eq, Debug)]
-pub struct Vector<T: Num>{
+pub struct Vector<T: Num> {
 	pub(crate) data: Vec<T>,
 	pub(crate) length: usize,
 }
 
-impl<T: Num> Vector<T>{
-	pub fn new() -> Self{
-		Self {
-			data: vec![],
-			length: 0,
-		}
-	}
 
+impl<T: Num> Vector<T>{
 	///Creates a Vector from number
 	///
 	/// # Example
@@ -90,6 +91,36 @@ impl<T: Num> Vector<T>{
 			output += self[i].clone() * other[i].clone();
 		}
 		output
+	}
+
+	/// Makes vector from start..end with step
+	///
+	/// # Example
+	/// ```
+	/// use tensors::linalg::Vector;
+	/// let a = Vector::range(1.0, 4.0, 2.0).unwrap();//{1 3}
+	/// ```
+	pub fn range(start:T, end:T, step:T) -> Result<Self, &'static str> {
+		if step == T::default() {
+			return Err("!!!Step cannot be zero.!!!");
+		}
+
+		if (start < end && step < T::default()) || (start > end && step > T::default()) {
+			return Err("!!!Invalid range: step direction does not match range direction.!!!");
+		}
+
+		let mut data = vec![];
+		let mut number = start;
+
+		while (step > T::from(0) && number < end) || (step < T::from(0) && number > end) {
+			data.push(number);
+			number += step;
+		}
+
+		Ok(Vector {
+			length: data.len(),
+			data: data,
+		})
 	}
 
 
@@ -519,6 +550,11 @@ impl<T:Num> Iterator for Vector<T>{
 mod tests{
 	use super::*;
 
+	#[test]
+	fn range() {
+		let a = Vector::range(1.0, 4.0, 2.0).unwrap();
+		println!("{a}");
+	}
 	#[test]
 	fn macros_test(){
 		let a = vector![1, 2, 3];

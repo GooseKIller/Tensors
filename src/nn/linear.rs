@@ -4,6 +4,36 @@ use crate::linalg::{Matrix, Vector};
 use rand::random;
 use crate::activation::Function;
 
+/// Representation of a linear layer in a neural network.
+///
+/// # Example
+/// ```
+/// use tensors::activation::Function;
+/// use tensors::nn::Linear;
+/// use tensors::linalg::Matrix;
+/// use tensors::matrix;
+///
+/// let lay = Linear::new(2, 4, true);
+///
+/// let b = matrix![[1.0, 2.0]];
+/// let shape = lay.call(b).shape();
+/// assert_eq!([1, 4], shape);
+/// ```
+///
+/// # Formula
+///
+/// ```math
+/// y = x^{+} \cdot W
+/// ```
+///
+/// where:
+/// ```math
+/// - $ y $ is the output,
+/// - $ W $ is the weight matrix and bias(including bias if applicable),
+/// - $ x^+ $ is the input matrix with added ones column,
+/// ```
+/// The bias is added as an additional row in the weight matrix. This allows the bias to be applied to all outputs in a single matrix multiplication.
+///
 pub struct Linear<T: Float>{
     pub matrix:Matrix<T>,
     pub(crate) bias: bool
@@ -39,29 +69,6 @@ impl<T:Float> Linear<T>
             matrix,
             bias,
         }
-
-        /*
-        if bias{
-            let mut data = Vec::with_capacity(col*(row+1));
-            for _ in 0..((row+1)*col){
-                data.push(random::<T>());
-            }
-            let matrix = Matrix::new(data, row+1, col);
-            return Self{
-                matrix,
-                bias
-            }
-        }
-
-        let mut data = Vec::with_capacity(row*col);
-        for _ in 0..(col*row){
-            data.push(random::<T>());
-        }
-        let matrix = Matrix::new(data, row, col);
-        Self{
-            matrix,
-            bias
-        }*/
     }
 
     /// Creates a matrix without random numbers

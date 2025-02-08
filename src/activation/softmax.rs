@@ -2,20 +2,37 @@ use crate::activation::Function;
 use crate::Float;
 use crate::linalg::{Matrix, Vector};
 
-/// Softmax function or normalized exponential function
+/// Softmax function (normalized exponential function).
 ///
-/// converts a vector of K real numbers into a probability distribution of K possible outcomes.
-/// # Defined as:
+/// Converts a vector of K real numbers into a probability distribution of K possible outcomes.
+/// The output values are in the range `[0, 1]` and sum to 1.
 ///
-///```math
-///  Softmax(x_i) = \frac{e^{x_i}}{\sum_{j=1}^{n} {e}^(x_j)}
-///```
+/// # Mathematical Definition
+/// For an input vector `x`, the Softmax function is defined as:
+/// ```math
+/// \text{Softmax}(x_i) = \frac{e^{x_i}}{\sum_{j=1}^{K} e^{x_j}}
+/// ```
+///
+/// # Examples
+/// ```
+/// use tensors::activation::{Function, SoftMax};
+/// use tensors::linalg::Matrix;
+/// use tensors::matrix;
+///
+/// let softmax = SoftMax::new();
+/// let input = matrix![[1.0, 2.0, 3.0]];
+/// let output = softmax.call(input);
+/// println!("Softmax output: {}", output);
+/// //[{0.09003057 0.24472848 0.66524094},
+/// // {0.090030566 0.24472846 0.66524094}]
+/// ```
+///
+/// # See Also
+/// - [Wikipedia: Softmax function](https://en.wikipedia.org/wiki/Softmax_function)
 pub struct SoftMax;
 
 impl SoftMax{
-    pub fn new() -> Self{
-        Self{}
-    }
+    pub fn new() -> Self {Self}
 
     fn vec_fun<T:Float>(&self, vector: Vector<T>) -> Vector<T>{
         let mut sum:T = T::default();
@@ -50,17 +67,10 @@ impl<T:Float> Function<T> for SoftMax {
     ///
     /// $`δ_{ij}`$ - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let softmax = self.call(matrix);
-        let mut det = Matrix::from_num(T::default(), row, cols);
-        for i in 0..row{
-            for j in 0..cols{
-                let kronecker:T = if i == j {1.into()} else { 0.into() };
-                det[[i, j]] = softmax[[i ,j]] * (kronecker - softmax[[i ,j]]);
-            }
-        }
-        det
-
+        let [row, cols] = matrix.shape();
+        let softmax = self.call(matrix.clone());
+        let identity_minus_softmax = Matrix::identity(T::default(), row, cols) - &softmax;
+        softmax.hadamard(&identity_minus_softmax).transpose() * &matrix
     }
 }
 
@@ -71,19 +81,27 @@ mod tests{
     use crate::linalg::Matrix;
 
     #[test]
-    fn relu(){
-        let matrix = matrix![[0.0, 1.0],
-                                        [1.0, 0.0]];
+    fn softmax_cqll(){
+        let matrix = matrix![[2.0, 4.0],
+                                        [1.0, 3.0]];
         let a = SoftMax::new();
         let matrix = a.call(matrix);
         println!("{}", matrix);
     }
 
     #[test]
-    fn derivative_relu(){
-        let matrix = matrix![[0.0, -10.0]];
+    fn der_softmax(){
+        let matrix = matrix![[2.0, 4.0],
+                                        [1.0, 3.0]];
         let a = SoftMax::new();
         let matrix = a.derivative(matrix);
         println!("{}", matrix);
+    }
+
+    #[test]
+    fn softmax() {
+        let matrix:Matrix<f32> = matrix![[1.0, 2.0, 3.0],[4.0, 5.0, 6.0]];
+        let softmax = SoftMax::new();
+        println!("{}", softmax.call(matrix));
     }
 }

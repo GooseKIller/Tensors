@@ -3,22 +3,28 @@ use crate::Float;
 use crate::linalg::Matrix;
 
 
-/// LeakyReLU
+/// Leaky ReLU activation function.
 ///
-/// # Defined as:
+/// Allows a small, non-zero gradient when the input is negative.
 ///
+/// # Mathematical Definition
+/// For an input `x`, the Leaky ReLU function is defined as:
 /// ```math
-///  LeakyReLU(x) = max(x, \alpha x)
-///```
+///  \text{LeakyReLU}(x) = \max(x, \alpha x)
+/// ```
 /// or
-///```math
-///  LeakyReLU(x) = \left\{
+/// ```math
+///  \text{LeakyReLU}(x) = \left\{
 /// \begin{array}{ll}
 /// x & \text{if } x \geq 0 \\
 /// \alpha x & \text{otherwise}
 /// \end{array}
 /// \right.
 /// ```
+///
+/// # See Also
+/// - [velog.io: Leaky ReLU](https://velog.io/@greensox284/Neural-Leaky-Rectified-Linear-Unit-Leaky-ReLU)
+
 pub struct LeakyReLU<T:Float>{
     alpha: T,
 }

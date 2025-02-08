@@ -44,7 +44,7 @@ impl<T: Float> Loss<T> for MSE<T> {
         let diff = target - output;
         let mut grad = vec![T::default(); length];
         grad.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = -(T::from_usize(2) * diff.data[i]) / (T::from_usize(length))
+            *x = (T::from_usize(2) * diff.data[i]) / (T::from_usize(length))
         });
         Matrix::new(grad, diff.rows, diff.cols)
     }

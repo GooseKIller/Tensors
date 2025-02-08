@@ -2,21 +2,27 @@ use crate::activation::Function;
 use crate::linalg::Matrix;
 use crate::Float;
 
-/// Rectified Linear Unit
+/// Rectified Linear Unit (ReLU) activation function.
 ///
-/// # Defined as:
-///```math
-///  ReLU(x) = max(x, 0)
-///```
+/// Outputs the input directly if it is positive; otherwise, it outputs zero.
+///
+/// # Mathematical Definition
+/// For an input `x`, the ReLU function is defined as:
+/// ```math
+///  \text{ReLU}(x) = \max(x, 0)
+/// ```
 /// or
-///```math
-///  ReLU(x) = \left\{
+/// ```math
+///  \text{ReLU}(x) = \left\{
 /// \begin{array}{ll}
 /// x & \text{if } x \geq 0 \\
 /// 0 & \text{if } x < 0
 /// \end{array}
 /// \right.
 /// ```
+///
+/// # See Also
+/// - [Wikipedia: Rectifier (neural networks)](https://en.wikipedia.org/wiki/Rectifier_(neural_networks))
 pub struct ReLU;
 
 impl ReLU {

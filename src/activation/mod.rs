@@ -22,6 +22,7 @@ mod sigmoid;
 mod leaky_relu;
 mod elu;
 mod selu;
+mod tanh;
 
 use std::any::Any;
 pub use relu::*;
@@ -30,24 +31,44 @@ pub use sigmoid::*;
 pub use leaky_relu::*;
 pub use elu::*;
 pub use selu::*;
+pub use tanh::*;
 
 use crate::linalg::Matrix;
 use crate::Float;
 
-/// All activation functions works only with Float types
+/// A trait for activation functions and other operations that can be applied to matrices.
 ///
-/// All activation function must implement this trait Function
+/// This trait is implemented by all activation functions in the Tensors library.
+/// It provides a common interface for applying functions to matrices and computing
+/// their gradients during backpropagation.
 pub trait Function<T: Float>: Any{
-    /// All functions must have name
-    /// to save architecture names
     fn name(&self) -> String;
 
-    /// Rust does not have similar thing like \_\_call__ in Python
+    /// Applies the function to the input matrix.
     ///
-    /// So just use method call
+    /// This method is the primary way to use a function (e.g., activation function, layer)
+    /// in the Tensors library. It takes an input matrix, applies the function to each element,
+    /// and returns the resulting matrix.
+    ///
+    /// # Arguments
+    /// * `matrix` - The input matrix to which the function will be applied.
+    ///
+    /// # Returns
+    /// A new matrix with the function applied to matrix.
+    ///
+    /// # Notes
+    /// - In Python, you might be familiar with the `__call__` method, which allows an object
+    ///   to be called like a function (e.g., `sigmoid(input)`). Rust does not have a direct
+    ///   equivalent, so we use the `call` method instead.
+    /// - If you prefer a more concise syntax, consider implementing the `Function` trait,
+    ///   which provides a `forward` method that can be used similarly.
     fn call(&self, matrix: Matrix<T>) -> Matrix<T>;
 
     /// Derivative for Function
+    ///
+    /// ## Arguments
+    ///
+    /// * `matrix` - the input matrix to which the derivative will be applied
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T>;
 
     fn is_linear(&self) -> bool{
