@@ -72,7 +72,7 @@ fn main() {
 
 ## Contributing
 
-We welcome contributions from the community! If you'd like to contribute to Tensors, please follow these steps:
+If you'd like to contribute to Tensors, please follow these steps:
 
 1. Fork the repository.
 
