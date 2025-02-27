@@ -1,13 +1,13 @@
-use std::fs::File;
-use std::{fs, io};
-use std::ops::Index;
-use serde::{Deserialize, Serialize};
-use crate::Float;
 use crate::activation::Function;
 use crate::linalg::Matrix;
-use crate::optim::Optimizer;
 use crate::loss::Loss;
 use crate::nn::Linear;
+use crate::optim::Optimizer;
+use crate::Float;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::ops::Index;
+use std::{fs, io};
 
 #[derive(Serialize, Deserialize)]
 struct ModelArchitecture {
@@ -40,20 +40,28 @@ struct LinearLayer {
 /// // Create the sequential model
 /// let mut model = Sequential::new(layers);
 /// ```
-pub struct Sequential<T:Float>{
-    layers: Vec<Box<dyn Function<T>>>
+pub struct Sequential<T: Float> {
+    layers: Vec<Box<dyn Function<T>>>,
+    clip_threshold: T,
 }
 
-impl<T:Float> Sequential<T> {
+impl<T: Float> Sequential<T> {
     /// Creates a new Sequential model with the given layers.
     ///
     /// # Arguments
     /// * `layers` - A vector(`Vec<Box<dyn Function<T>>>`) of layers to be included in the model.
-    pub fn new(layers: Vec<Box<dyn Function<T>>>) -> Self{
-        Self{
-            layers,
-        }
+    pub fn new(layers: Vec<Box<dyn Function<T>>>) -> Self {
+        Self { layers, clip_threshold: T::from(5) }
     }
+
+    /// Sets a new value for the gradient clipping threshold.
+    ///
+    /// By default, the clipping
+    /// threshold is set to 5.0.
+    pub fn set_clip_threshold(&mut self, new_value: T) {
+        self.clip_threshold = new_value;
+    }
+
     pub fn layers(&self) -> Vec<&Box<dyn Function<T>>> {
         let mut layers_copy = vec![];
         for i in &self.layers {
@@ -84,9 +92,9 @@ impl<T:Float> Sequential<T> {
     /// # Returns
     /// The output tensor after passing through all layers.
     ///
-    pub fn forward(&self, input:Matrix<T>) -> Matrix<T>{
+    pub fn forward(&self, input: Matrix<T>) -> Matrix<T> {
         let mut output = input;
-        for layer in &self.layers{
+        for layer in &self.layers {
             output = layer.call(output);
         }
         output
@@ -142,19 +150,18 @@ impl<T:Float> Sequential<T> {
         target: Matrix<T>,
         optimizer: &mut O,
         loss_fn: &L,
-    ) -> T{
+    ) -> T {
         let mut outputs = vec![input.clone()];
         for layer in &self.layers {
             let output = layer.call(outputs.last().unwrap().clone());
             outputs.push(output);
         }
 
-        // TODO(Add DGC(Dynamic Gradient Controller)) if is NaN then decrease DGC
         let loss = loss_fn.call(&outputs.last().unwrap(), &target);
         let mut deltas = vec![loss_fn.gradient(&outputs.last().unwrap(), &target)];
         let mut delta = deltas.last().unwrap().clone();
-        for (i, layer) in self.layers.iter().enumerate().skip(1).rev(){
-            if layer.is_linear(){
+        for (i, layer) in self.layers.iter().enumerate().skip(1).rev() {
+            if layer.is_linear() {
                 delta = layer.derivative(delta);
             } else {
                 let matrix = layer.derivative(outputs[i].clone());
@@ -164,20 +171,29 @@ impl<T:Float> Sequential<T> {
         }
 
         let mut i = 0;
-        for ((layer, delta), input_data) in self.layers
-            .iter_mut().zip(deltas
-                .iter().rev()).zip(outputs
-                    .iter().take(outputs.len() - 1)) {
+        for ((layer, delta), input_data) in self
+            .layers
+            .iter_mut()
+            .zip(deltas.iter().rev())
+            .zip(outputs.iter().take(outputs.len() - 1))
+        {
             if let Some(mut weight) = layer.get_data() {
-                if layer.is_bias() {
+                let mut grads = if layer.is_bias() {
                     let mut changed_data = input_data.clone();
                     changed_data.add_column(vec![T::one(); input_data.rows]);
-                    let grads = changed_data.transpose() * delta;
-                    optimizer.step(i, &mut weight, &grads);
+                    changed_data.transpose() * delta
                 } else {
-                    let grads = input_data.transpose() * delta;
-                    optimizer.step(i, &mut weight, &grads);
+                    input_data.transpose() * delta
+                };
+
+                // gradient clipping
+                let grad_norm = grads.norm(T::from(2));
+                if grad_norm > self.clip_threshold {
+                    let scale = self.clip_threshold / grad_norm;
+                    grads *= scale;
                 }
+
+                optimizer.step(i, &mut weight, &grads);
                 i += 1;
                 layer.set_data(weight);
             }
@@ -186,32 +202,27 @@ impl<T:Float> Sequential<T> {
         return loss;
     }
 
-    pub fn save(&self, name: &str) -> io::Result<()>{
+    pub fn save(&self, name: &str) -> io::Result<()> {
         fs::create_dir_all(name)?;
 
-        let arch:Vec<String> = self.layers
-            .iter()
-            .map(|layer| layer.name())
-            .collect();
-        let architecture = ModelArchitecture{
-            layers: arch
-        };
+        let arch: Vec<String> = self.layers.iter().map(|layer| layer.name()).collect();
+        let architecture = ModelArchitecture { layers: arch };
         let arch_file_path = format!("{}/architecture.json", name);
         let arch_file = File::create(arch_file_path)?;
         serde_json::to_writer(arch_file, &architecture)?;
 
-        for (i, layer) in self.layers.iter().enumerate(){
+        for (i, layer) in self.layers.iter().enumerate() {
             if layer.is_linear() {
                 let layer_file_path = format!("{}/layer_{}.json", name, i);
                 let layer_file = File::create(layer_file_path)?;
 
                 let data_mx = layer.get_data().unwrap();
                 let is_bias = layer.get_bias().is_some();
-                let data = LinearLayer{
-                    data:data_mx.data_as_string(),
-                    rows:data_mx.rows,
-                    cols:data_mx.cols,
-                    bias:is_bias
+                let data = LinearLayer {
+                    data: data_mx.data_as_string(),
+                    rows: data_mx.rows,
+                    cols: data_mx.cols,
+                    bias: is_bias,
                 };
                 serde_json::to_writer(layer_file, &data)?;
             }
@@ -219,26 +230,26 @@ impl<T:Float> Sequential<T> {
         Ok(())
     }
 
-    pub fn load(&mut self, name:&str) -> io::Result<()>{
+    pub fn load(&mut self, name: &str) -> io::Result<()> {
         let arch_file_path = format!("{}/architecture.json", name);
         let arch_file = File::open(arch_file_path)?;
         let architecture: ModelArchitecture = serde_json::from_reader(arch_file)?;
 
-        let this_model:Vec<String> = self.layers
-            .iter()
-            .map(|layer| layer.name())
-            .collect();
+        let this_model: Vec<String> = self.layers.iter().map(|layer| layer.name()).collect();
 
         for (i, layer_name) in architecture.layers.iter().enumerate() {
             if layer_name != &this_model[i] {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
-                    "!!!Wrong architecture expected {} got {}!!!",
-                    this_model[i], layer_name
-                )));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "!!!Wrong architecture expected {} got {}!!!",
+                        this_model[i], layer_name
+                    ),
+                ));
             }
         }
 
-        for i in 0..architecture.layers.len(){
+        for i in 0..architecture.layers.len() {
             if architecture.layers[i].starts_with("Linear") {
                 let layer_file_path = format!("{}/layer_{}.json", name, i);
                 let layer_file = File::open(layer_file_path)?;
@@ -248,9 +259,9 @@ impl<T:Float> Sequential<T> {
                     matrix: Matrix::new(
                         layer_data.data.split(" ").map(|x| T::from_str(x)).collect(),
                         layer_data.rows,
-                        layer_data.cols
+                        layer_data.cols,
                     ),
-                    bias: layer_data.bias
+                    bias: layer_data.bias,
                 };
                 self.layers[i] = Box::new(linear_data);
             }
@@ -258,52 +269,70 @@ impl<T:Float> Sequential<T> {
 
         Ok(())
     }
-
 }
 
-impl<T:Float> Index<usize> for Sequential<T> {
+impl<T: Float> Index<usize> for Sequential<T> {
     type Output = Box<dyn Function<T>>;
     fn index(&self, index: usize) -> &Box<dyn Function<T>> {
         &self.layers[index]
     }
-
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use crate::activation::{Function, Sigmoid};
-    use crate::linalg::Matrix;
-    use crate::loss::{SSE};
-    use crate::{DataType, matrix};
+    use crate::linalg::{Matrix, Vector};
+    use crate::loss::{MSE, SSE};
+    use crate::nn::sequential::Sequential;
     use crate::nn::Linear;
-    use crate::nn::sequential::{Sequential};
-    use crate::optim::SGD;
+    use crate::optim::{Adam, SGD};
+    use crate::{matrix, DataType};
 
     #[test]
     fn learn_xor_test() {
         let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
         let output = matrix![[0.0], [1.0], [1.0], [0.0]];
 
-        let layers: Vec<Box< dyn Function<f32>>> = vec![
+        let layers: Vec<Box<dyn Function<f32>>> = vec![
             Box::new(Linear::new(2, 2, true)),
             Box::new(Sigmoid::new()),
             Box::new(Linear::new(2, 1, true)),
-            Box::new(Sigmoid::new())
+            Box::new(Sigmoid::new()),
         ];
         let mut model = Sequential::new(layers);
         let mut optim = SGD::new(1f32);
         let loss = SSE::new(DataType::f32());
-        for i in 0..10000{
-            let loss = model.train(
-                input.clone(),
-                output.clone(),
-                &mut optim,
-                &loss
-            );
+        for i in 0..10000 {
+            let loss = model.train(input.clone(), output.clone(), &mut optim, &loss);
             if i % 1000 == 0 {
                 println!("{loss}");
             }
         }
         println!("{}", model.forward(input));
+    }
+
+    #[test]
+    fn regresion() {
+        let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
+        let f = |x| 3.0 * x + 1.0;
+        let y = x.map(f);
+
+        let layers: Vec<Box<dyn Function<f32>>> = vec![Box::new(Linear::new(1, 1, true))];
+        let mut optim = Adam::new(0.1, &layers);
+        let mut model = Sequential::new(layers);
+        let loss = MSE::new(DataType::f32());
+        for i in 0..1000 {
+            let loss_num = model.train(x.transpose(), y.transpose(), &mut optim, &loss);
+            if i % 100 == 0 {
+                println!("{loss_num}");
+            }
+        }
+        let num = 435.0;
+        println!(
+            "REAL VAL: {}\nMODEL VAL: {}",
+            f(num),
+            model.forward(matrix![[num]])
+        );
+        println!("{}", model[0].get_data().unwrap());
     }
 }

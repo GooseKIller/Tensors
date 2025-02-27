@@ -4,7 +4,6 @@
 //!
 //! 2.[Sequential] - Sequential model for building neural networks by stacking layers
 
-
 mod linear;
 mod sequential;
 

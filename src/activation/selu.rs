@@ -23,7 +23,7 @@ use crate::Float;
 /// - λ = 1.0507
 ///
 /// # See Also
- /// - [velog.io: Scaled Exponential Linear Unit](https://velog.io/@greensox284/Activation-Scaled-Exponential-Linear-Unit-SELU)
+/// - [velog.io: Scaled Exponential Linear Unit](https://velog.io/@greensox284/Activation-Scaled-Exponential-Linear-Unit-SELU)
 pub struct SELU<T: Float> {
     alpha: T,
     lambda: T,

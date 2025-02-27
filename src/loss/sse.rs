@@ -1,6 +1,6 @@
-use crate::Float;
 use crate::linalg::Matrix;
 use crate::loss::Loss;
+use crate::Float;
 
 /// Sum of Squared Errors (SSE) loss function.
 ///
@@ -40,12 +40,15 @@ impl<T: Float> SSE<T> {
 impl<T: Float> Loss<T> for SSE<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
         if output.size() != target.size() {
-            panic!("!!!Size of output matrix and target must be equal!!!\
-            \nOutput size:{:?} Target size: {:?}", output.size(), target.size())
+            panic!(
+                "!!!Size of output matrix and target must be equal!!!\
+            \nOutput size:{:?} Target size: {:?}",
+                output.size(),
+                target.size()
+            )
         }
         let diff = target - output;
         diff.map(|x| x.powf(T::from(2))).sum()
-
     }
 
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {

@@ -1,16 +1,16 @@
-use crate::Float;
 use crate::linalg::Matrix;
 use crate::loss::Loss;
+use crate::Float;
 
 pub struct CrossEntropy<T: Float>(T);
 
-impl<T:Float> CrossEntropy<T> {
-    pub fn new(_data_type:T) -> Self{
+impl<T: Float> CrossEntropy<T> {
+    pub fn new(_data_type: T) -> Self {
         Self(_data_type)
     }
 }
 
-impl<T:Float> Loss<T> for CrossEntropy<T> {
+impl<T: Float> Loss<T> for CrossEntropy<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
         let mut loss = T::default();
         let num_samples = output.rows;
@@ -24,12 +24,10 @@ impl<T:Float> Loss<T> for CrossEntropy<T> {
                 } else {
                     output[[i, j]]
                 };
-                // Используем логарифм предсказанной вероятности
                 loss -= target[[i, j]] * predicted.ln();
             }
         }
 
-        // Возвращаем среднюю потерю
         loss / T::from_usize(num_samples)
     }
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
@@ -38,22 +36,19 @@ impl<T:Float> Loss<T> for CrossEntropy<T> {
 
         for i in 0..num_samples {
             for j in 0..output.cols {
-                // Вычисляем градиент
                 grad[[i, j]] -= target[[i, j]];
             }
         }
 
-        // Возвращаем градиент, нормализованный на количество образцов
         grad * (T::one() / T::from_usize(num_samples))
     }
-
 }
 
 #[cfg(test)]
-mod test{
-    use crate::DataType;
+mod test {
     use crate::linalg::Matrix;
     use crate::loss::{CrossEntropy, Loss};
+    use crate::DataType;
 
     #[test]
     fn test_cross_entropy_loss() {

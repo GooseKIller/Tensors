@@ -2,7 +2,6 @@ use crate::activation::Function;
 use crate::linalg::Matrix;
 use crate::Float;
 
-
 /// Exponential Linear Unit (ELU) activation function.
 ///
 /// Maps input values such that:
@@ -66,11 +65,7 @@ impl<T: Float> Function<T> for Sigmoid {
         for i in matrix.data {
             data.push(self.num_der(i));
         }
-        Matrix {
-            data,
-            rows,
-            cols,
-        }
+        Matrix { data, rows, cols }
     }
 }
 

@@ -1,6 +1,6 @@
-use crate::Float;
 use crate::linalg::Matrix;
 use crate::loss::Loss;
+use crate::Float;
 
 /// Mean absolute percentage error
 ///
@@ -10,15 +10,15 @@ use crate::loss::Loss;
 ///```
 ///
 /// Where $`ŷ_i`$ predicted and $`y_i`$ expected value
-pub struct MAPE<T:Float>(T);
+pub struct MAPE<T: Float>(T);
 
-impl<T:Float> MAPE<T> {
-    pub fn new(datatype_number: T) -> Self{
+impl<T: Float> MAPE<T> {
+    pub fn new(datatype_number: T) -> Self {
         Self(datatype_number)
     }
 }
 
-impl<T:Float> Loss<T> for MAPE<T> {
+impl<T: Float> Loss<T> for MAPE<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
         if output.size() != target.size() {
             panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.size(), target.size())
@@ -26,8 +26,8 @@ impl<T:Float> Loss<T> for MAPE<T> {
         let length = output.data.len();
         let diff = output - target;
         let mut total_loss = T::default();
-        for i in 0..length{
-            if target.data[i] != T::default(){
+        for i in 0..length {
+            if target.data[i] != T::default() {
                 total_loss += (diff.data[i] / target.data[i]).abs();
             }
         }
@@ -46,7 +46,7 @@ impl<T:Float> Loss<T> for MAPE<T> {
         let length = output.data.len();
         let mut grad = vec![T::default(); length];
 
-        for i in 0..length{
+        for i in 0..length {
             if target.data[i] != T::default() {
                 let sign = if output.data[i] > target.data[i] {
                     T::one() // 1
@@ -58,7 +58,6 @@ impl<T:Float> Loss<T> for MAPE<T> {
                 grad[i] = sign / target.data[i];
             }
         }
-        Matrix::new(grad, target.rows, output.cols) * (T::from_usize(1)/ T::from_usize(length))
+        Matrix::new(grad, target.rows, output.cols) * (T::from_usize(1) / T::from_usize(length))
     }
-
 }

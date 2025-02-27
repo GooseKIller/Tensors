@@ -26,7 +26,9 @@ use crate::Float;
 pub struct ReLU;
 
 impl ReLU {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl<T: Float> Function<T> for ReLU {

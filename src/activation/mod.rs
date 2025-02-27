@@ -16,21 +16,21 @@
 //!
 //!6.[SoftMax]
 
-mod relu;
-mod softmax;
-mod sigmoid;
-mod leaky_relu;
 mod elu;
+mod leaky_relu;
+mod relu;
 mod selu;
+mod sigmoid;
+mod softmax;
 mod tanh;
 
-use std::any::Any;
-pub use relu::*;
-pub use softmax::*;
-pub use sigmoid::*;
-pub use leaky_relu::*;
 pub use elu::*;
+pub use leaky_relu::*;
+pub use relu::*;
 pub use selu::*;
+pub use sigmoid::*;
+pub use softmax::*;
+use std::any::Any;
 pub use tanh::*;
 
 use crate::linalg::Matrix;
@@ -41,7 +41,7 @@ use crate::Float;
 /// This trait is implemented by all activation functions in the Tensors library.
 /// It provides a common interface for applying functions to matrices and computing
 /// their gradients during backpropagation.
-pub trait Function<T: Float>: Any{
+pub trait Function<T: Float>: Any {
     fn name(&self) -> String;
 
     /// Applies the function to the input matrix.
@@ -71,7 +71,7 @@ pub trait Function<T: Float>: Any{
     /// * `matrix` - the input matrix to which the derivative will be applied
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T>;
 
-    fn is_linear(&self) -> bool{
+    fn is_linear(&self) -> bool {
         false
     }
 
@@ -79,10 +79,16 @@ pub trait Function<T: Float>: Any{
         None
     }
 
-    fn set_data(&mut self, _data:Matrix<T>){}
+    fn set_data(&mut self, _data: Matrix<T>) {}
 
-    fn get_weights(&self) -> Option<Matrix<T>> {None}
+    fn get_weights(&self) -> Option<Matrix<T>> {
+        None
+    }
 
-    fn get_bias(&self) -> Option<Matrix<T>> {None}
-    fn is_bias(&self) -> bool {false}
+    fn get_bias(&self) -> Option<Matrix<T>> {
+        None
+    }
+    fn is_bias(&self) -> bool {
+        false
+    }
 }

@@ -1,6 +1,6 @@
 use crate::activation::Function;
-use crate::Float;
 use crate::linalg::{Matrix, Vector};
+use crate::{Float, vector};
 
 /// Softmax function (normalized exponential function).
 ///
@@ -31,68 +31,77 @@ use crate::linalg::{Matrix, Vector};
 /// - [Wikipedia: Softmax function](https://en.wikipedia.org/wiki/Softmax_function)
 pub struct SoftMax;
 
-impl SoftMax{
-    pub fn new() -> Self {Self}
+impl SoftMax {
+    pub fn new() -> Self {
+        Self
+    }
 
-    fn vec_fun<T:Float>(&self, vector: Vector<T>) -> Vector<T>{
-        let mut sum:T = T::default();
-        let vector:Vec<T> = vector.into();
-        for i in &vector{
-            sum += i.exp();
-        }
-        let mut answer = Vector::from_num(T::default(),vector.len());
-        for i in 0..vector.len(){
-            answer[i] = vector[i].exp()/sum;
-        }
-        answer
+    fn vec_fun<T: Float>(&self, vector: Vector<T>) -> Vector<T> {
+        let sum = vector.map_vec(|x| x.exp()).sum();
+        vector.map_vec(|x| x.exp() / sum)
     }
 }
 
-impl<T:Float> Function<T> for SoftMax {
+impl<T: Float> Function<T> for SoftMax {
     fn name(&self) -> String {
         String::from("SoftMax")
     }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let mut data:Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
-        for i in 0..matrix.rows{
-            let vector = matrix.get_row(i);
-            let vector = self.vec_fun(vector);
+        let mut data: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
+        for i in 0..matrix.rows {
+            let vector = self.vec_fun(matrix.get_row(i));
             data.push(vector)
         }
         Matrix::from(data)
-
     }
 
     /// $`Softmax'(x_i)= Softmax(x_i) * (δ_{ij} - Softmax(x_j))`$
     ///
     /// $`δ_{ij}`$ - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
+    /// WARNING UNTESTED WELL
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = matrix.shape();
-        let softmax = self.call(matrix.clone());
-        let identity_minus_softmax = Matrix::identity(T::default(), row, cols) - &softmax;
-        softmax.hadamard(&identity_minus_softmax).transpose() * &matrix
+        let softmax_output = self.call(matrix.clone());
+        let mut jacobian: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
+
+        for i in 0..matrix.rows {
+            let mut row: Vector<T> = Vector::from_num(T::default(), matrix.cols);
+            let softmax_i = softmax_output.get_row(i);
+
+            for j in 0..matrix.cols {
+                if i == j {
+                    // Softmax(x_i) * (1 - Softmax(x_i))
+                    row[j] = softmax_i[j] * (T::one() - softmax_i[j]);
+                } else {
+                    // -Softmax(x_i) * Softmax(x_j)
+                    row[j] = -softmax_i[j] * softmax_i[j];
+                }
+            }
+
+            jacobian.push(row);
+        }
+
+        Matrix::from(jacobian)
+
     }
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use crate::activation::{Function, SoftMax};
-    use crate::matrix;
     use crate::linalg::Matrix;
+    use crate::matrix;
 
     #[test]
-    fn softmax_cqll(){
-        let matrix = matrix![[2.0, 4.0],
-                                        [1.0, 3.0]];
+    fn softmax_cqll() {
+        let matrix = matrix![[2.0, 4.0], [1.0, 3.0]];
         let a = SoftMax::new();
         let matrix = a.call(matrix);
         println!("{}", matrix);
     }
 
     #[test]
-    fn der_softmax(){
-        let matrix = matrix![[2.0, 4.0],
-                                        [1.0, 3.0]];
+    fn der_softmax() {
+        let matrix = matrix![[2.0, 4.0], [1.0, 3.0]];
         let a = SoftMax::new();
         let matrix = a.derivative(matrix);
         println!("{}", matrix);
@@ -100,8 +109,9 @@ mod tests{
 
     #[test]
     fn softmax() {
-        let matrix:Matrix<f32> = matrix![[1.0, 2.0, 3.0],[4.0, 5.0, 6.0]];
+        let matrix: Matrix<f32> = matrix![[0.9, 0.1, 0.8, 0.2]];
         let softmax = SoftMax::new();
-        println!("{}", softmax.call(matrix));
+        println!("{}", softmax.call(matrix.clone()));
+        println!("{}", softmax.derivative(matrix));
     }
 }

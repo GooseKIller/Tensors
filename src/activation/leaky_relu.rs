@@ -1,7 +1,6 @@
 use crate::activation::Function;
-use crate::Float;
 use crate::linalg::Matrix;
-
+use crate::Float;
 
 /// Leaky ReLU activation function.
 ///
@@ -25,31 +24,29 @@ use crate::linalg::Matrix;
 /// # See Also
 /// - [velog.io: Leaky ReLU](https://velog.io/@greensox284/Neural-Leaky-Rectified-Linear-Unit-Leaky-ReLU)
 
-pub struct LeakyReLU<T:Float>{
+pub struct LeakyReLU<T: Float> {
     alpha: T,
 }
 
-impl<T:Float> LeakyReLU<T> {
-    pub fn new(_:T) -> Self{
+impl<T: Float> LeakyReLU<T> {
+    pub fn new(_: T) -> Self {
         let two = T::from_usize(2);
         let ten = T::from_usize(10);
-        Self{
-            alpha: two/ten
-        }
+        Self { alpha: two / ten }
     }
 
-    fn leaky_num(&self, num: T) -> T{
+    fn leaky_num(&self, num: T) -> T {
         let zero = T::default();
-        if num > zero{
+        if num > zero {
             num
         } else {
             num * self.alpha
         }
     }
 
-    fn leaky_der(&self, num:T) -> T{
+    fn leaky_der(&self, num: T) -> T {
         let zero = T::default();
-        if num > zero{
+        if num > zero {
             1.into()
         } else {
             self.alpha
@@ -57,22 +54,20 @@ impl<T:Float> LeakyReLU<T> {
     }
 }
 
-impl<T:Float> From<T> for LeakyReLU<T>  {
+impl<T: Float> From<T> for LeakyReLU<T> {
     fn from(value: T) -> Self {
-        Self{
-            alpha:value,
-        }
+        Self { alpha: value }
     }
 }
 
-impl<T:Float> Function<T> for LeakyReLU<T>{
+impl<T: Float> Function<T> for LeakyReLU<T> {
     fn name(&self) -> String {
         String::from("LeakyReLU")
     }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row*cols);
-        for i in matrix.data{
+        let mut data = Vec::with_capacity(row * cols);
+        for i in matrix.data {
             let num = self.leaky_num(i);
             data.push(num);
         }
@@ -89,8 +84,8 @@ impl<T:Float> Function<T> for LeakyReLU<T>{
     /// ```
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row*cols);
-        for i in matrix.data{
+        let mut data = Vec::with_capacity(row * cols);
+        for i in matrix.data {
             let num = self.leaky_der(i);
             data.push(num);
         }
@@ -99,14 +94,14 @@ impl<T:Float> Function<T> for LeakyReLU<T>{
 }
 
 #[cfg(test)]
-mod tests{
-    use crate::activation::{Function};
+mod tests {
     use crate::activation::leaky_relu::LeakyReLU;
-    use crate::{matrix, DataType};
+    use crate::activation::Function;
     use crate::linalg::Matrix;
+    use crate::{matrix, DataType};
 
     #[test]
-    fn leaky_relu(){
+    fn leaky_relu() {
         let matrix = matrix![[10.0, -10.0]];
         let a = LeakyReLU::new(DataType::f64());
         let matrix = a.call(matrix);
@@ -114,7 +109,7 @@ mod tests{
     }
 
     #[test]
-    fn derivative_leaky_relu(){
+    fn derivative_leaky_relu() {
         let matrix = matrix![[10.0, -10.0]];
         let a = LeakyReLU::from(0.2);
         let matrix = a.derivative(matrix);

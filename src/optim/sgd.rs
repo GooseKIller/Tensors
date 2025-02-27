@@ -1,7 +1,6 @@
-use crate::Float;
-use crate::linalg::Matrix;
 use super::Optimizer;
-
+use crate::linalg::Matrix;
+use crate::Float;
 
 /// Stochastic Gradient Descent(SGD)
 ///
@@ -22,9 +21,7 @@ pub struct SGD<T: Float> {
 
 impl<T: Float> SGD<T> {
     pub fn new(learning_rate: T) -> Self {
-        Self {
-            learning_rate
-        }
+        Self { learning_rate }
     }
 }
 
@@ -39,6 +36,4 @@ impl<T: Float> Optimizer<T> for SGD<T> {
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

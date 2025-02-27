@@ -8,18 +8,20 @@
 //!
 //! [MAPE] - Mean absolute percentage error
 
-mod mse;
-mod mape;
 mod crossentropy;
+mod mape;
+mod mse;
 
+mod binarycrossentropy;
 mod sse;
 
-pub use mse::*;
-pub use mape::*;
-pub use sse::*;
-pub use crossentropy::*;
-use crate::Float;
 use crate::linalg::Matrix;
+use crate::Float;
+pub use binarycrossentropy::*;
+pub use crossentropy::*;
+pub use mape::*;
+pub use mse::*;
+pub use sse::*;
 
 pub trait Loss<T: Float> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T;

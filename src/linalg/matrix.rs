@@ -1,12 +1,12 @@
 use crate::linalg::{Tensor, Vector};
 use crate::{Float, Num};
+use rand::distributions::{Distribution, Standard};
+use rand::random;
 use rayon::prelude::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
-use rand::random;
-use rand::distributions::{Distribution, Standard};
+use std::ops::{Index, IndexMut};
 
 /// Matrix definition
 ///
@@ -56,6 +56,18 @@ macro_rules! matrix {
 /// // a + b;  // Incorrect
 /// ```
 ///
+/// All Matrix operations
+///
+/// | name |operation|
+/// |------|---------|
+/// | plus | + |
+/// |plus assign| += |
+/// |minus | - |
+/// |minus assign| -=|
+/// |mul| * |
+/// |mul assign| *= |
+/// |hadamard(element-wise)| & |
+/// |hadamard(element-wise) assign| &=|
 #[derive(PartialEq, Eq, Debug)]
 pub struct Matrix<T: Num> {
     pub(crate) data: Vec<T>,
@@ -93,8 +105,8 @@ impl<T: Num> Matrix<T> {
     /// //         {0, 0},
     /// //         {0, 0}]
     /// ```
-    pub fn zeros(shape: [usize; 2]) -> Self{
-        Self{
+    pub fn zeros(shape: [usize; 2]) -> Self {
+        Self {
             data: vec![T::default(); shape[0] * shape[1]],
             rows: shape[0],
             cols: shape[1],
@@ -120,10 +132,30 @@ impl<T: Num> Matrix<T> {
     }
 
     pub fn try_from(value: Tensor<T>) -> Result<Self, &'static str> {
-        if value.shape.len() != 1 {
+        if value.shape.len() != 2 {
             return Err("Shape size must be 2");
         }
         Ok(Matrix::new(value.data, value.shape[0], value.shape[1]))
+    }
+
+    pub fn from_diag(data:Vector<T>, rows:usize, cols:usize) -> Matrix<T> {
+        assert_eq!(data.length, min(rows, cols),
+                   "!!!The length of the data vector ({})\
+                    must be equal to the minimum of rows ({}) and cols ({})!!!",
+                   data.length,
+                   rows,
+                   cols
+        );
+        let mut mx_data = vec![T::default(); cols * rows];
+        for i in 0..min(cols, rows) {
+            let index = (cols * i) + i;
+            mx_data[index] = data[i];
+        }
+        Matrix{
+            data:mx_data,
+            rows,
+            cols
+        }
     }
 
     /// Creates a identity matrix
@@ -144,7 +176,7 @@ impl<T: Num> Matrix<T> {
         for i in 0..rows {
             for j in 0..cols {
                 if i == j {
-                    matrix[i*rows + j] = T::from(1);
+                    matrix[i * rows + j] = T::from(1);
                 }
             }
         }
@@ -180,18 +212,18 @@ impl<T: Num> Matrix<T> {
     /// let a = matrix![[1], [2]];
     /// println!("SHAPE:{:?}", a.shape());//[2, 1]
     /// ```
-    pub fn shape(&self) -> [usize; 2]{
+    pub fn shape(&self) -> [usize; 2] {
         [self.rows, self.cols]
     }
 
-    /// Returns row count
-    pub fn row(&self) -> usize {
-        self.rows.clone()
+    /// Returns amount of rows
+    pub fn rows(&self) -> usize {
+        self.rows
     }
 
-    /// Returns column count
-    pub fn col(&self) -> usize {
-        self.cols.clone()
+    /// Returns amount of columns
+    pub fn cols(&self) -> usize {
+        self.cols
     }
 
     /// Returns sum of all elements of matrix
@@ -214,9 +246,12 @@ impl<T: Num> Matrix<T> {
     /// let col:Vector<i32> = example.get_col(0);// [1 3]
     /// ```
     pub fn get_col(&self, index: usize) -> Vector<T> {
-        assert!(index < self.cols,
-                "!!!Index:{} is greater than or equal to columns count:{}!!!",
-                index, self.cols);
+        assert!(
+            index < self.cols,
+            "!!!Index:{} is greater than or equal to columns count:{}!!!",
+            index,
+            self.cols
+        );
         let mut vector = Vec::with_capacity(self.rows);
         for i in 0..self.rows {
             let index_col = i * self.cols + index;
@@ -226,6 +261,16 @@ impl<T: Num> Matrix<T> {
     }
 
     /// Removes column from matrix
+    ///
+    /// # Example
+    /// ```
+    /// use tensors::matrix;
+    /// use tensors::linalg::Matrix;
+    /// let example = matrix![[1., 2.], [3., 4.]];
+    /// let rem_example = example.rem_col(1);
+    /// assert_eq!(rem_example,
+    ///          matrix![[1.], [3.]]);
+    /// ```
     pub fn rem_col(&self, index: usize) -> Matrix<T> {
         assert!(index < self.cols, "!!!Column index out of bounds!!!");
 
@@ -235,10 +280,10 @@ impl<T: Num> Matrix<T> {
             new_data.remove(index);
         }
 
-        Matrix{
+        Matrix {
             data: new_data,
             rows: self.rows,
-            cols: self.cols-1
+            cols: self.cols - 1,
         }
     }
 
@@ -253,9 +298,12 @@ impl<T: Num> Matrix<T> {
     /// let col:Vector<i32> = example.get_row(1);//[1 2]
     /// ```
     pub fn get_row(&self, index: usize) -> Vector<T> {
-        assert!(index < self.rows,
-                "!!!Index:{} is greater than or equal to rows count:{}!!!",
-                index, self.rows);
+        assert!(
+            index < self.rows,
+            "!!!Index:{} is greater than or equal to rows count:{}!!!",
+            index,
+            self.rows
+        );
         let start_index = index * self.cols;
         let end_index = start_index + self.cols;
 
@@ -304,8 +352,11 @@ impl<T: Num> Matrix<T> {
     /// // [1,1,2]]
     /// ```
     pub fn add_column(&mut self, column: Vec<T>) {
-        assert_eq!(column.len(), self.rows,
-                   "!!!the length of the Vec<T> is not equal to the size of the rows of the matrix!!!");
+        assert_eq!(
+            column.len(),
+            self.rows,
+            "!!!the length of the Vec<T> is not equal to the size of the rows of the matrix!!!"
+        );
         for i in 0..self.rows {
             self.data.insert((i + 1) * self.cols + i, column[i].clone());
         }
@@ -328,8 +379,10 @@ impl<T: Num> Matrix<T> {
     /// // [2,2]]
     /// ```
     pub fn add_row(&mut self, row: Vec<T>) {
-        assert_eq!(row.len(), self.cols,
-                   "!!!the length of the Vec<T> is not equal to the size of the columns of the matrix!!!"
+        assert_eq!(
+            row.len(),
+            self.cols,
+            "!!!the length of the Vec<T> is not equal to the size of the columns of the matrix!!!"
         );
         for i in row {
             self.data.push(i)
@@ -360,9 +413,9 @@ impl<T: Num> Matrix<T> {
         new_matrix
     }
 
-    pub fn sum_rows(&self) -> Matrix<T>{
+    pub fn sum_rows(&self) -> Matrix<T> {
         let mut matrix = vec![T::default(); self.cols];
-        for i in 0..self.cols{
+        for i in 0..self.cols {
             matrix[i] = self.get_col(i).sum();
         }
         Matrix::new(matrix, 1, self.cols)
@@ -380,15 +433,17 @@ impl<T: Num> Matrix<T> {
     ///
     /// println!("{}", a.compare(b));//[{1 -1 0}]
     /// ```
-    pub fn compare(&self, other:Matrix<T>) -> Matrix<T>{
-        assert_eq!(self.shape(), other.shape(),
-                   "!!!Can't compare matrices different shapes!!!\n Matrix a:{:?}; Matrix b:{:?}",
-                   self.shape(),
-                   other.shape()
+    pub fn compare(&self, other: Matrix<T>) -> Matrix<T> {
+        assert_eq!(
+            self.shape(),
+            other.shape(),
+            "!!!Can't compare matrices different shapes!!!\n Matrix a:{:?}; Matrix b:{:?}",
+            self.shape(),
+            other.shape()
         );
-        let mut comparisons = vec![T::default(); self.rows*self.cols];
-        for i in 0..self.data.len(){
-            if self.data[i] > other.data[i]{
+        let mut comparisons = vec![T::default(); self.rows * self.cols];
+        for i in 0..self.data.len() {
+            if self.data[i] > other.data[i] {
                 comparisons[i] = T::from(1);
             } else if self.data[i] < other.data[i] {
                 comparisons[i] = T::from(1).neg();
@@ -406,17 +461,22 @@ impl<T: Num> Matrix<T> {
     /// let a = matrix![[5,0,-3]];
     /// println!("{}", a.compare_num(0));//[{1, 0 ,-1}]
     ///```
-    pub fn compare_num(&self, other: T) -> Matrix<T>{
+    pub fn compare_num(&self, other: T) -> Matrix<T> {
         Matrix::new(
-            self.data.iter().map(|x| {
-                if *x > other{
-                    T::from(1)
-                } else if *x == other {
-                    T::from(0)
-                } else {
-                    T::from(1).neg()
-                }
-            }).collect(), self.rows, self.cols
+            self.data
+                .iter()
+                .map(|x| {
+                    if *x > other {
+                        T::from(1)
+                    } else if *x == other {
+                        T::from(0)
+                    } else {
+                        T::from(1).neg()
+                    }
+                })
+                .collect(),
+            self.rows,
+            self.cols,
         )
     }
 
@@ -428,19 +488,28 @@ impl<T: Num> Matrix<T> {
     /// use tensors::matrix;
     /// let a = matrix![[2, 3, 1], [0, 8, -2]];
     /// let b = matrix![[3, 1, 4], [7, 9, 5]];
+    /// assert_eq!(&a & &b,
+    ///    matrix![[6, 3, 4]
+    ///            ,[0, 72, -10]]);
     /// assert_eq!(a.hadamard(&b),
-    /// matrix![[6, 3, 4]
-    ///        ,[0, 72, -10]])
+    ///    matrix![[6, 3, 4]
+    ///            ,[0, 72, -10]])
     /// ```
-    pub fn hadamard(&self, other: &Matrix<T>) -> Matrix<T>{
-        assert_eq!(other.shape(), self.shape(),
-                   "!!!Shapes must be equal. Matrix A: {:?} Matrix B: {:?}!!!",
-                    self.shape(), other.shape());
+    ///
+    /// Or
+    pub fn hadamard(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(
+            other.shape(),
+            self.shape(),
+            "!!!Shapes must be equal. Matrix A: {:?} Matrix B: {:?}!!!",
+            self.shape(),
+            other.shape()
+        );
         let mut ans = vec![T::default(); self.data.len()];
-        ans.par_iter_mut().enumerate().for_each(|(i, x)|{
+        ans.par_iter_mut().enumerate().for_each(|(i, x)| {
             *x = self.data[i] * other.data[i];
         });
-        Matrix::new(ans,self.rows, self.cols)
+        Matrix::new(ans, self.rows, self.cols)
     }
 
     /// [Kronecker](https://en.wikipedia.org/wiki/Kronecker_product) product of two matrices
@@ -460,7 +529,7 @@ impl<T: Num> Matrix<T> {
     ///             [18, 21, 24, 28]])
     /// ```
     pub fn kronecker(&self, other: &Matrix<T>) -> Matrix<T> {
-        let mut ans = vec![T::default(); self.data.len()*other.data.len()];
+        let mut ans = vec![T::default(); self.data.len() * other.data.len()];
         ans.par_iter_mut().enumerate().for_each(|(index, x)| {
             let i = index / (self.cols * other.cols);
             let j = index % (self.cols * other.cols);
@@ -471,12 +540,10 @@ impl<T: Num> Matrix<T> {
 
             *x = self.data[a_row * self.cols + a_col] * other.data[b_row * other.cols + b_col];
         });
-        Matrix::new(ans,
-                    self.rows*other.rows,
-                    self.cols*other.cols)
+        Matrix::new(ans, self.rows * other.rows, self.cols * other.cols)
     }
 
-    /// Mapping for each element
+    /// Parallel mapping for each element
     ///
     ///
     /// # Example
@@ -488,12 +555,11 @@ impl<T: Num> Matrix<T> {
     /// // [{1 0},
     /// // {1 0}]
     /// ```
-    pub fn map<F>(&self, f:F) -> Matrix<T>
-        where F: Fn(T) -> T + Sync + Send {
-        let new_data = self.data.clone()
-            .par_iter_mut()
-            .map(|x| f(*x))
-            .collect();
+    pub fn map<F>(&self, f: F) -> Matrix<T>
+    where
+        F: Fn(T) -> T + Sync + Send,
+    {
+        let new_data = self.data.clone().par_iter_mut().map(|x| f(*x)).collect();
         Matrix {
             data: new_data,
             rows: self.rows,
@@ -511,14 +577,17 @@ impl<T: Num> Matrix<T> {
     /// let b = Matrix::from_num(2, 2, 2);
     /// let result = a.zip_with(&b, |x, y| x + y);
     /// ```
-    pub fn zip_with<F>(&self, other: &Matrix<T>, f:F) -> Matrix<T>
-        where F: Fn(T, T) -> T + Sync + Send {
-        let new_data = self.data.clone()
+    pub fn zip_with<F>(&self, other: &Matrix<T>, f: F) -> Matrix<T>
+    where
+        F: Fn(T, T) -> T + Sync + Send,
+    {
+        let new_data = self
+            .data
+            .clone()
             .par_iter_mut()
             .enumerate()
-            .map(|(i, x)| {
-                f(*x, other.data[i])
-            }).collect();
+            .map(|(i, x)| f(*x, other.data[i]))
+            .collect();
         Matrix {
             data: new_data,
             rows: self.rows,
@@ -526,9 +595,61 @@ impl<T: Num> Matrix<T> {
         }
     }
 
-    /// Function for
-    pub(crate) fn data_as_string(&self) -> String{
-        self.data.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(" ")
+    /// Returns a new matrix where each element is the maximum
+    /// between number and the original matrix
+    /// and the given number.
+    ///
+    /// # Example
+    /// ```
+    /// use tensors::linalg::Matrix;
+    /// use tensors::matrix;
+    /// let a = matrix![[1.0, 2.0], [0.0, -1.0]];
+    /// let b = a.max(0.);
+    /// assert_eq!(
+    ///     b,
+    ///     matrix![[1.0, 2.0], [0.0, 0.0]]
+    /// );
+    /// ```
+    pub fn max(&self, num: T) -> Matrix<T> {
+        self.map(|x| if x > num { x } else { num })
+    }
+
+    /// Returns a new matrix where each element is the minimum
+    /// between the corresponding element of the original matrix
+    /// and the given number.
+    ///
+    /// # Example
+    /// ```
+    /// use tensors::linalg::Matrix;
+    /// use tensors::matrix;
+    /// let a = matrix![[1.0, 2.0], [0.0, -1.0]];
+    /// let b = a.min(0.);
+    /// assert_eq!(
+    ///     b,
+    ///     matrix![[0.0, 0.0], [0.0, -1.0]]
+    /// );
+    /// ```
+    pub fn min(&self, num: T) -> Matrix<T> {
+        self.map(|x| if x > num { num } else { x })
+    }
+
+    /// makes diagonal from matrix
+    pub fn diag(&self) -> Vector<T> {
+        let mut data = vec![T::default(); min(self.cols, self.rows)];
+        for i in 0..min(self.cols, self.rows) {
+            let index = (self.cols * i) + i;
+            data[i] = self.data[index];
+        }
+        Vector::from(data)
+    }
+
+    /// Function for saving
+    pub(crate) fn data_as_string(&self) -> String {
+        self.data
+            .iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -551,304 +672,16 @@ impl<T: Num> Index<[usize; 2]> for Matrix<T> {
 impl<T: Num> IndexMut<[usize; 2]> for Matrix<T> {
     fn index_mut(&mut self, index: [usize; 2]) -> &mut Self::Output {
         let [i, j] = index;
-        assert!(i < self.rows && j < self.cols,
-                "!!!Matrix index out of bounds: i = {}, j = {}, rows = {}, cols = {}!!!",
-                i, j, self.rows, self.cols);
+        assert!(
+            i < self.rows && j < self.cols,
+            "!!!Matrix index out of bounds: i = {}, j = {}, rows = {}, cols = {}!!!",
+            i,
+            j,
+            self.rows,
+            self.cols
+        );
 
         &mut self.data[(self.cols * i) + j]
-    }
-}
-
-impl<T: Num> Neg for Matrix<T> {
-    type Output = Matrix<T>;
-    fn neg(self) -> Self::Output {
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = -self.data[i];
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-impl<T: Num> Add<&Matrix<T>> for Matrix<T> {
-    type Output = Matrix<T>;
-
-    fn add(self, rhs: &Matrix<T>) -> Self::Output {
-        assert!(self.rows == rhs.rows && self.cols == rhs.cols,
-                "!!!Matrix dimensions do not match!!!\nCannot add Matrix 1: {:?} and Matrix 2: {:?}",
-                self.shape(), rhs.shape());
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] + rhs.data[i];
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-impl<T: Num> AddAssign<&Matrix<T>> for Matrix<T> {
-    fn add_assign(&mut self, rhs: &Matrix<T>) {
-        assert!(self.rows == rhs.rows && self.cols == rhs.cols,
-                "!!!Matrix dimensions do not match!!!\nCannot add assign Matrix 1: {:?} and Matrix 2: {:?}",
-                self.shape(), rhs.shape());
-
-        self.data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x += rhs.data[i];
-        });
-    }
-}
-
-impl<T: Num> Add<T> for Matrix<T> {
-    type Output = Matrix<T>;
-    fn add(self, rhs: T) -> Self::Output {
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] + rhs;
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-macro_rules! impl_add_for_types {
-    ($($type:ty),*) => {
-        $(
-            impl Add<Matrix<$type>> for $type {
-                type Output = Matrix<$type>;
-
-                fn add(self, rhs: Matrix<$type>) -> Matrix<$type> {
-                    rhs + self
-                }
-            }
-        )*
-    };
-}
-impl_add_for_types!(i16, i32, i64, i128, f32, f64);
-
-impl<T: Num> AddAssign<T> for Matrix<T> {
-    fn add_assign(&mut self, rhs: T) {
-        self.data.par_iter_mut().for_each(|x| {
-            *x += rhs;
-        });
-    }
-}
-
-impl<T: Num> Sub<&Matrix<T>> for Matrix<T> {
-    type Output = Matrix<T>;
-    fn sub(self, rhs: &Matrix<T>) -> Self::Output {
-        assert!(self.rows == rhs.rows && self.cols == rhs.cols,
-                "!!!Matrix dimensions do not match!!!\nMatrix 1: [{}, {}], Matrix 2: [{} {}]",
-                self.rows, self.cols,
-                rhs.rows, rhs.cols
-        );
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] - rhs.data[i];
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-impl<T: Num> Sub<&Matrix<T>> for &Matrix<T> {
-    type Output = Matrix<T>;
-    fn sub(self, rhs: &Matrix<T>) -> Self::Output {
-        assert!(self.rows == rhs.rows && self.cols == rhs.cols,
-                "!!!Matrix dimensions do not match!!!\nMatrix 1: [{}, {}], Matrix 2: [{} {}]",
-                self.rows, self.cols,
-                rhs.rows, rhs.cols);
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] - rhs.data[i];
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-impl<T: Num> SubAssign<&Matrix<T>> for Matrix<T> {
-    fn sub_assign(&mut self, rhs: &Matrix<T>) {
-        if rhs.rows == 1 && rhs.cols == 1 {
-            *self -= rhs.data[0];
-            return;
-        }
-        assert!(self.rows == rhs.rows && self.cols == rhs.cols,
-                "!!!Matrix dimensions do not match!!!\nCannot sub-assign Matrix 1: {:?} and Matrix 2: {:?}",
-                self.shape(), rhs.shape());
-        self.data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x -= rhs.data[i];
-        });
-    }
-}
-
-impl<T: Num> Sub<T> for Matrix<T> {
-    type Output = Matrix<T>;
-    fn sub(self, rhs: T) -> Self::Output {
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] - rhs;
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-macro_rules! impl_sub_for_types {
-    ($($type:ty),*) => {
-        $(
-            impl Sub<Matrix<$type>> for $type {
-                type Output = Matrix<$type>;
-
-                fn sub(self, rhs: Matrix<$type>) -> Matrix<$type> {
-                    let mut data = vec![self; rhs.rows * rhs.cols];
-                    data.par_iter_mut().enumerate().for_each(|(i, x)| {
-                        *x = self - rhs.data[i];
-                    });
-                    Matrix::new(data, rhs.rows, rhs.cols)
-                }
-            }
-        )*
-    };
-}
-impl_sub_for_types!(i16, i32, i64, i128, f32, f64);
-
-impl<T: Num> SubAssign<T> for Matrix<T> {
-    fn sub_assign(&mut self, rhs: T) {
-        self.data.par_iter_mut().for_each(|x| *x -= rhs);
-    }
-}
-
-impl<T: Num> Mul<&Vector<T>> for Matrix<T> {
-    type Output = Vector<T>;
-    fn mul(self, rhs: &Vector<T>) -> Self::Output {
-        assert_eq!(self.cols, rhs.length, "!!!Matrix amount of columns != Vector length!!!\n\
-    Matrix cols: {}, Vector length: {}!!!", self.cols, rhs.length);
-        let mut data = vec![T::default(); self.rows];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            for i in 0..self.cols {
-                *x += self[[index, i]] * rhs[i];
-            }
-        });
-        Vector::from(data)
-    }
-}
-
-impl<T: Num> Mul<&Vector<T>> for &Matrix<T> {
-    type Output = Vector<T>;
-    fn mul(self, rhs: &Vector<T>) -> Self::Output {
-        assert_eq!(self.cols, rhs.length,
-                   "!!!Matrix amount of columns != Vector length!!!\n\
-    Matrix cols: {}, Vector length: {}!!!", self.cols, rhs.length);
-
-        let mut data = vec![T::default(); self.rows];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            for i in 0..self.cols {
-                *x += self[[index, i]] * rhs[i];
-            }
-        });
-        Vector::from(data)
-    }
-}
-
-impl<T: Num> Mul<&Matrix<T>> for Matrix<T> {
-    type Output = Matrix<T>;
-    fn mul(self, rhs: &Matrix<T>) -> Self::Output {
-        if rhs.rows == 1 && rhs.cols == 1 {
-            return self * rhs.data[0];
-        }
-        assert_eq!(self.cols, rhs.rows,
-                   "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
-    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.size(), rhs.size());
-
-        let mut data = vec![T::default(); self.rows * rhs.cols];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            let (i, j) = (index / rhs.cols, index % rhs.cols);
-            let mut sum = T::default();
-            for k in 0..self.cols {
-                sum += self[[i, k]] * rhs[[k, j]];
-            }
-            *x = sum;
-        });
-        Self::new(data, self.rows, rhs.cols)
-    }
-}
-
-impl<T: Num> Mul<&Matrix<T>> for &Matrix<T> {
-    type Output = Matrix<T>;
-    fn mul(self, rhs: &Matrix<T>) -> Self::Output {
-        assert_eq!(self.cols, rhs.rows, "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
-    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.size(), rhs.size());
-
-
-        let mut data = vec![T::default(); self.rows * rhs.cols];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            let (i, j) = (index / rhs.cols, index % rhs.cols);
-            let mut sum = T::default();
-            for k in 0..self.cols {
-                sum += self[[i, k]] * rhs[[k, j]];
-            }
-            *x = sum;
-        });
-        Matrix::new(data, self.rows, rhs.cols)
-    }
-}
-
-impl<T: Num> MulAssign<&Matrix<T>> for Matrix<T> {
-    /// WARNING if it is not square matrix sizes will change
-    fn mul_assign(&mut self, rhs: &Matrix<T>) {
-        assert_eq!(self.cols, rhs.rows,
-                   "!!!Matrix amount of columns in the 1st matrix \
-                    does not equal the amount of rows in the 2nd matrix!!!\nCan't multiply");
-
-        let mut result = Self::from_num(T::default(), self.rows, rhs.cols);
-        result
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(index, x)| {
-                let (i, j) = (index / rhs.cols, index % rhs.cols);
-                let mut sum = T::default();
-                for k in 0..self.cols {
-                    sum += self[[i, k]] * rhs[[k, j]];
-                }
-                *x = sum;
-            });
-        *self = result;
-    }
-}
-
-impl<T: Num> Mul<T> for Matrix<T> {
-    type Output = Matrix<T>;
-    fn mul(self, rhs: T) -> Self::Output {
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] * rhs;
-        });
-        Matrix::new(data, self.rows, self.cols)
-    }
-}
-
-// it's workaround, but it works
-macro_rules! impl_mul_for_types {
-    ($($type:ty),*) => {
-        $(
-            impl Mul<Matrix<$type>> for $type {
-                type Output = Matrix<$type>;
-
-                fn mul(self, matrix: Matrix<$type>) -> Matrix<$type> {
-                    matrix * self
-                }
-            }
-            impl Mul<&Matrix<$type>> for $type {
-                type Output = Matrix<$type>;
-
-                fn mul(self, matrix: &Matrix<$type>) -> Matrix<$type> {
-                    matrix.clone() * self
-                }
-            }
-        )*
-    };
-}
-impl_mul_for_types!(i16, i32, i64, i128, f32, f64);
-impl<T: Num> MulAssign<T> for Matrix<T> {
-    fn mul_assign(&mut self, rhs: T) {
-        self.data.par_iter_mut().for_each(|x| {
-            *x = *x * rhs;
-        });
     }
 }
 
@@ -861,9 +694,10 @@ impl<T: Num> From<Vec<Vec<T>>> for Matrix<T> {
             assert_eq!(row.len(), cols, "!!!All columns must be equal!!!");
         }
 
-        assert!(!(rows != 0 && cols == 0),
-                "!!!Invalid matrix dimensions. Multiple empty rows!!!");
-
+        assert!(
+            !(rows != 0 && cols == 0),
+            "!!!Invalid matrix dimensions. Multiple empty rows!!!"
+        );
 
         let data = value.into_iter().flatten().collect();
         Self::new(data, rows, cols)
@@ -931,27 +765,37 @@ impl<T: Num> Clone for Matrix<T> {
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),
-            rows: self.rows.clone(),
-            cols: self.cols.clone(),
+            rows: self.rows,
+            cols: self.cols,
         }
     }
 }
 
 // Float Number implementation
 impl<T: Float> Matrix<T> {
-    pub fn randn(row: usize, col:usize) -> Self
-        where Standard: Distribution<T>{
-        Self{
-            data: vec![T::default(); row*col].iter()
-                .map(|_| (-T::from(2) * random::<T>().ln()).sqrt()
-                    * (T::from(2) * T::pi() * random::<T>()).cos() )
+    pub fn randn(row: usize, col: usize) -> Self
+    where
+        Standard: Distribution<T>,
+    {
+        Self {
+            data: vec![T::default(); row * col]
+                .iter()
+                .map(|_| {
+                    (-T::from(2) * random::<T>().ln()).sqrt()
+                        * (T::from(2) * T::pi() * random::<T>()).cos()
+                })
                 .collect(),
             rows: row,
-            cols: col
+            cols: col,
         }
     }
+
+    /// Natural logarithm for all elements
+    pub fn ln(&self) -> Self {
+        self.map(|x| x.ln())
+    }
     /// Finds the norm of Matrix in any power
-    pub fn norm(self, p: T) -> T {
+    pub fn norm(&self, p: T) -> T {
         assert!(p >= T::one(), "!!!Number p:{} must be positive!!!", p);
         let mut norm = T::default();
 
@@ -965,12 +809,12 @@ impl<T: Float> Matrix<T> {
             max_num
         } else if p == T::from(2) {
             let mut sum_of_squares = T::default();
-            for x in self.data{
+            for x in &self.data {
                 sum_of_squares += x.powf(T::from(2));
             }
-            return sum_of_squares.sqrt()
+            return sum_of_squares.sqrt();
         } else {
-            for i in self.data {
+            for i in &self.data {
                 norm += i.powf(p);
             }
             norm.powf(T::one() / p)
@@ -991,12 +835,11 @@ impl<T: Float> Matrix<T> {
     /// Finds determinant of matrix
     ///
     /// Using Gauss Method (<https://en.wikipedia.org/wiki/Gaussian_elimination>)
-    ///
-    /// O(N^3)
     pub fn det(&self) -> T {
-        assert_eq!(self.rows, self.cols,
-                   "!!!The determinant is defined only for square matrices!!!");
-
+        assert_eq!(
+            self.rows, self.cols,
+            "!!!The determinant is defined only for square matrices!!!"
+        );
 
         let mut matrix = self.clone();
         let mut det = 1.into();
@@ -1061,7 +904,6 @@ mod tests {
     use crate::{vector, DataType};
     use std::time::Instant;
 
-
     #[test]
     fn mat_and_num() {
         let a = matrix![[1, 2], [1, 2]];
@@ -1069,9 +911,8 @@ mod tests {
         println!("{}", 1 * &a * &b);
     }
 
-
     #[test]
-    fn calc_num_test(){
+    fn calc_num_test() {
         let a = matrix![[1]];
         let b = 10;
         assert_eq!(b * a, matrix![[10]]);
@@ -1424,35 +1265,34 @@ mod tests {
     }
 
     #[test]
-    fn sum_of_rows(){
-        let a = matrix![[1,2,3],
-                                    [4,5,6]];
+    fn sum_of_rows() {
+        let a = matrix![[1, 2, 3], [4, 5, 6]];
         println!("{}", a.sum_rows());
     }
 
     #[test]
-    fn comparisons(){
-        let a = matrix![[-1,0,1]];
-        assert_eq!(a.compare(Matrix::from_num(0, 1, 3)), matrix![[-1,0,1]]);
+    fn comparisons() {
+        let a = matrix![[-1, 0, 1]];
+        assert_eq!(a.compare(Matrix::from_num(0, 1, 3)), matrix![[-1, 0, 1]]);
     }
 
     #[test]
-    fn comparisons_num(){
-        let a = matrix![[-1,0,1]];
-        assert_eq!(a.compare_num(0), matrix![[-1,0,1]])
+    fn comparisons_num() {
+        let a = matrix![[-1, 0, 1]];
+        assert_eq!(a.compare_num(0), matrix![[-1, 0, 1]])
     }
 
     #[test]
     fn map_test() {
-        let a = matrix![[1,2], [3,4]];
+        let a = matrix![[1, 2], [3, 4]];
         let b = a.map(|x| x % 2);
         println!("{b}");
     }
 
     #[test]
     fn num_mat_mul() {
-        let a = matrix![[1.0,2.0,3.0]];
-        let b = matrix![[2.0,4.0,6.0]];
+        let a = matrix![[1.0, 2.0, 3.0]];
+        let b = matrix![[2.0, 4.0, 6.0]];
         assert_eq!(2.0 * &a, b);
         assert_eq!(a * 2.0, b);
     }
@@ -1464,9 +1304,33 @@ mod tests {
     }
 
     #[test]
-    fn rem_col(){
-        let a = matrix![[1,2,3],
-                                    [4,5,6]];
+    fn rem_col() {
+        let a = matrix![[1, 2, 3], [4, 5, 6]];
         println!("{}", a.rem_col(2));
+    }
+
+    #[test]
+    fn mul_a() {
+        let mut a = matrix![[1.0, 2.0], [3.0, 4.0]];
+        let b = Matrix::from_num(1.0, 2, 3);
+
+        a *= &b;
+        println!("{a}");
+    }
+
+    #[test]
+    fn diag_test() {
+        let r = 3;
+        let c = 1;
+        let a = Matrix::new((0..(r*c) as i32).collect(), r, c);
+        println!("{a}");
+        println!("{}", a.diag());
+    }
+
+    #[test]
+    fn diag_mx() {
+        let v = vector![1, 2, 3];
+        let b = Matrix::from_diag(v, 4, 3);
+        println!("{b}");
     }
 }
