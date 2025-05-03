@@ -28,8 +28,8 @@ struct LinearLayer {
 /// where each layer can be a linear transformation followed by an activation function.
 /// # Example
 /// ```
-/// use tensors::activation::{Function, Sigmoid};
-/// use tensors::nn::{Linear, Sequential};
+/// use tensorrs::activation::{Function, Sigmoid};
+/// use tensorrs::nn::{Linear, Sequential};
 /// // Define the layers of the MLP
 /// let layers: Vec<Box< dyn Function<f32>>> = vec![
 ///             Box::new(Linear::new(2, 2, true)),// First layer: Linear transformation
@@ -112,12 +112,12 @@ impl<T: Float> Sequential<T> {
     /// - Returns the computed loss value for the current training step.
     /// # Example
     ///```
-    /// use tensors::activation::{Function, Sigmoid};
-    /// use tensors::{DataType, matrix};
-    /// use tensors::linalg::Matrix;
-    /// use tensors::loss::SSE;
-    /// use tensors::nn::{Linear, Sequential};
-    /// use tensors::optim::SGD;
+    /// use tensorrs::activation::{Function, Sigmoid};
+    /// use tensorrs::{DataType, matrix};
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::loss::SSE;
+    /// use tensorrs::nn::{Linear, Sequential};
+    /// use tensorrs::optim::SGD;
     ///
     /// let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
     /// let output = matrix![[0.0], [1.0], [1.0], [0.0]];
@@ -280,13 +280,14 @@ impl<T: Float> Index<usize> for Sequential<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::activation::{Function, Sigmoid};
+    use crate::activation::{Function, Sigmoid, Tanh};
     use crate::linalg::{Matrix, Vector};
-    use crate::loss::{MSE, SSE};
+    use crate::loss::{CrossEntropy, MSE, SSE};
     use crate::nn::sequential::Sequential;
     use crate::nn::Linear;
     use crate::optim::{Adam, SGD};
     use crate::{matrix, DataType};
+    use crate::utils::one_hot_encoding;
 
     #[test]
     fn learn_xor_test() {
@@ -313,8 +314,8 @@ mod test {
 
     #[test]
     fn regresion() {
-        let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
-        let f = |x| 3.0 * x + 1.0;
+        let x = Matrix::from(Vector::range(100.0, 105.0, 0.125).unwrap());
+        let f = |x| 30.0 * x - 6.0;
         let y = x.map(f);
 
         let layers: Vec<Box<dyn Function<f32>>> = vec![Box::new(Linear::new(1, 1, true))];
@@ -334,5 +335,58 @@ mod test {
             model.forward(matrix![[num]])
         );
         println!("{}", model[0].get_data().unwrap());
+    }
+
+    #[test]
+    fn classification() {
+        let x = Matrix::from(Vector::range(0., 10., 0.1).unwrap());
+        let f = |x: f32| if x < 5. {0.} else { 1. };
+        let y = x.map(f);
+
+        let layers: Vec<Box<dyn Function<f32>>> = vec![
+            Box::new(Linear::new(1, 1, true)), // Линейный слой с 1 входом и 2 выходами (для двух классов)
+            Box::new(Tanh::new()),         // Функция активации Softmax для классификации
+        ];
+
+        let mut optim = Adam::new(0.001, &layers);
+        let mut model = Sequential::new(layers);
+        let loss = CrossEntropy::new(DataType::f32());
+
+        let _y_data = Matrix::from(
+            one_hot_encoding(
+                y.get_data()
+                .iter().
+                map(|x| *x as usize)
+                .collect::<Vec<usize>>(),
+            2,
+                0.0f32)
+        );
+
+        for i in 0..10000 {
+            let loss_num = model.train(
+                x.transpose(),
+                y.transpose(),
+                &mut optim,
+                &loss
+            );
+            if i % 100 == 0 {
+                println!("Loss: {}", loss_num);
+            }
+        }
+
+        let test_values = vec![2.0, 4.0, 6.0, 8.0];
+        for &num in &test_values {
+            let prediction = model.forward(matrix![[num]]);
+            println!("{}", prediction);
+            /*
+            let preds = Vector::from(prediction);
+            println!("Input: {}, Predicted class: {}", num, preds.argmax());
+             */
+            println!("Input: {}, Predicted class: {}",
+                     num,
+                     prediction.compare_num(0.5))
+        }
+        println!("{}", model[0].get_data().unwrap())
+
     }
 }

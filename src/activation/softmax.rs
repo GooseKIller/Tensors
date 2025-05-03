@@ -1,6 +1,7 @@
 use crate::activation::Function;
 use crate::linalg::{Matrix, Vector};
-use crate::{Float, vector};
+use crate::Float;
+use rayon::prelude::*;
 
 /// Softmax function (normalized exponential function).
 ///
@@ -15,9 +16,9 @@ use crate::{Float, vector};
 ///
 /// # Examples
 /// ```
-/// use tensors::activation::{Function, SoftMax};
-/// use tensors::linalg::Matrix;
-/// use tensors::matrix;
+/// use tensorrs::activation::{Function, SoftMax};
+/// use tensorrs::linalg::Matrix;
+/// use tensorrs::matrix;
 ///
 /// let softmax = SoftMax::new();
 /// let input = matrix![[1.0, 2.0, 3.0]];
@@ -37,8 +38,10 @@ impl SoftMax {
     }
 
     fn vec_fun<T: Float>(&self, vector: Vector<T>) -> Vector<T> {
-        let sum = vector.map_vec(|x| x.exp()).sum();
-        vector.map_vec(|x| x.exp() / sum)
+        let max = vector.max_val().unwrap();
+        let shifted = vector.map_vec(|x| x - max);
+        let sum = shifted.map_vec(|x| x.exp()).sum();
+        shifted.map_vec(|x| x.exp() / sum)
     }
 }
 
@@ -58,30 +61,37 @@ impl<T: Float> Function<T> for SoftMax {
     /// $`Softmax'(x_i)= Softmax(x_i) * (δ_{ij} - Softmax(x_j))`$
     ///
     /// $`δ_{ij}`$ - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
-    /// WARNING UNTESTED WELL
+    ///
+    /// WARNING UNTESTED WELL AND DO NOT WORK NORMAL
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let softmax_output = self.call(matrix.clone());
-        let mut jacobian: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
+        let s = self.call(matrix.clone());
+        let size = (matrix.rows, matrix.cols);
 
-        for i in 0..matrix.rows {
-            let mut row: Vector<T> = Vector::from_num(T::default(), matrix.cols);
-            let softmax_i = softmax_output.get_row(i);
+        // Параллельное вычисление градиентов для каждой строки
+        let grad_rows: Vec<Vector<T>> = (0..size.0)
+            .into_par_iter()
+            .map(|i| {
+                let row = s.get_row(i);
+                let diag = row.clone();
+                let outer = row.outer(&row);
 
-            for j in 0..matrix.cols {
-                if i == j {
-                    // Softmax(x_i) * (1 - Softmax(x_i))
-                    row[j] = softmax_i[j] * (T::one() - softmax_i[j]);
-                } else {
-                    // -Softmax(x_i) * Softmax(x_j)
-                    row[j] = -softmax_i[j] * softmax_i[j];
-                }
-            }
+                //(0..size.1)
+                  //  .map(|j| diag[j] - outer[[j, j]])
+                    //.collect::<Vector<_>>();
+                let mut data = vec![T::default(); size.1];
+                data
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(j, x)|{
+                        *x = diag[j] - outer[[i, j]];
+                    });
+                Vector::from(
+                    data
+                )
+            })
+            .collect();
 
-            jacobian.push(row);
-        }
-
-        Matrix::from(jacobian)
-
+        Matrix::from(grad_rows)
     }
 }
 
@@ -92,7 +102,7 @@ mod tests {
     use crate::matrix;
 
     #[test]
-    fn softmax_cqll() {
+    fn softmax_call() {
         let matrix = matrix![[2.0, 4.0], [1.0, 3.0]];
         let a = SoftMax::new();
         let matrix = a.call(matrix);

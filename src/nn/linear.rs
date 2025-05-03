@@ -8,10 +8,10 @@ use rand::random;
 ///
 /// # Example
 /// ```
-/// use tensors::activation::Function;
-/// use tensors::nn::Linear;
-/// use tensors::linalg::Matrix;
-/// use tensors::matrix;
+/// use tensorrs::activation::Function;
+/// use tensorrs::nn::Linear;
+/// use tensorrs::linalg::Matrix;
+/// use tensorrs::matrix;
 ///
 /// let lay = Linear::new(2, 4, true);
 ///
@@ -88,9 +88,9 @@ where
     ///# Example
     ///
     /// ```
-    ///use tensors::linalg::Matrix;
-    ///use tensors::matrix;
-    ///use tensors::nn::Linear;
+    ///use tensorrs::linalg::Matrix;
+    ///use tensorrs::matrix;
+    ///use tensorrs::nn::Linear;
     ///
     ///let linear:Linear<f64> = Linear::new(1, 2, true);//with one bias row it will be 2x2
     ///assert_eq!([2, 2], linear.shape());
@@ -104,9 +104,9 @@ where
     /// # Example
     ///
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
-    /// use tensors::nn::Linear;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::nn::Linear;
     /// let act1:Linear<f64> = Linear::from(matrix![[1.0],
     ///                                 [1.0]]);
     /// let sum_num = 2.0;
@@ -123,9 +123,9 @@ impl<T: Float> From<Matrix<T>> for Linear<T> {
     ///# Example
     ///
     /// ```
-    ///use tensors::linalg::Matrix;
-    ///use tensors::matrix;
-    ///use tensors::nn::Linear;
+    ///use tensorrs::linalg::Matrix;
+    ///use tensorrs::matrix;
+    ///use tensorrs::nn::Linear;
     ///
     ///let mx:Matrix<f64> = matrix![[1.0],
     ///                 [1.0]]; // this is bias
@@ -154,7 +154,7 @@ impl<T: Float> Function<T> for Linear<T> {
         matrix * &self.matrix
     }
 
-    /// not real derivative just delta calculating
+    /// not real derivative just gradient calculating
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
         if self.bias {
             let ans = &matrix * &self.matrix.transpose();

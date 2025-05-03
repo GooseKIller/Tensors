@@ -14,8 +14,8 @@ use crate::Float;
 ///
 /// # Examples
 /// ```
-/// use tensors::activation::{Function, Tanh};
-/// use tensors::linalg::Matrix;
+/// use tensorrs::activation::{Function, Tanh};
+/// use tensorrs::linalg::Matrix;
 ///
 /// let tanh = Tanh::new();
 /// let input = Matrix::from(vec![vec![0.0], vec![1.0], vec![-1.0]]);

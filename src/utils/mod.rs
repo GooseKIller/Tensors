@@ -5,7 +5,34 @@ mod autodiff;
 
 pub use autodiff::*;
 
-
+/// Performs one-hot encoding on a vector of categorical indices.
+///
+/// Given a vector of indices (`data`), this function converts each index into a one-hot encoded vector
+/// of the specified `size`. Each resulting vector has all elements set to zero except for the position
+/// corresponding to the index, which is set to one.
+///
+/// # Parameters
+/// - `data`: Input vector containing categorical indices (0-based).
+/// - `size`: Dimension of the output one-hot vectors. Must be greater than the maximum index in `data`.
+/// - `_`: Phantom parameter to infer the float type `T` (e.g., `f32` or `f64`). Value is ignored.
+/// # Examples
+/// ```
+/// use tensorrs::linalg::Vector;
+/// use tensorrs::utils::one_hot_encoding;
+/// use tensorrs::vector;
+///
+/// let data = vec![2, 0, 3];
+/// let encoded = one_hot_encoding(data, 4, 0.0f32);
+///
+/// assert_eq!(
+///     encoded,
+///     vec![
+///         vector![0.0, 0.0, 1.0, 0.0],
+///         vector![1.0, 0.0, 0.0, 0.0],
+///         vector![0.0, 0.0, 0.0, 1.0]
+///     ]
+/// );
+/// ```
 pub fn one_hot_encoding<T: Float>(data: Vec<usize>, size: usize, _: T) -> Vec<Vector<T>> {
     assert!(
         *data.iter().max().unwrap_or(&0usize) < size,

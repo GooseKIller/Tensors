@@ -6,6 +6,10 @@
 
 mod linear;
 mod sequential;
+mod rnn;
+mod linear_builder;
 
 pub use linear::*;
 pub use sequential::*;
+pub use linear_builder::*;
+pub use rnn::*;

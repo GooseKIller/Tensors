@@ -88,7 +88,5 @@ pub trait Function<T: Float>: Any {
     fn get_bias(&self) -> Option<Matrix<T>> {
         None
     }
-    fn is_bias(&self) -> bool {
-        false
-    }
+    fn is_bias(&self) -> bool {false}
 }

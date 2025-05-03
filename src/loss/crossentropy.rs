@@ -32,6 +32,7 @@ impl<T: Float> Loss<T> for CrossEntropy<T> {
     }
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
         let num_samples = output.rows;
+        /*
         let mut grad = output.clone();
 
         for i in 0..num_samples {
@@ -40,7 +41,11 @@ impl<T: Float> Loss<T> for CrossEntropy<T> {
             }
         }
 
+
         grad * (T::one() / T::from_usize(num_samples))
+
+         */
+        (output - &target) * (T::one() / T::from_usize(num_samples))
     }
 }
 

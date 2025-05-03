@@ -2,7 +2,7 @@ use crate::linalg::{Matrix, Tensor};
 use crate::{Float, Num};
 use rayon::prelude::IntoParallelRefMutIterator;
 use rayon::prelude::*;
-use std::cmp::min;
+use std::cmp::{min, Ordering};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
@@ -10,8 +10,8 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 ///
 ///# Example
 ///```
-/// use tensors::vector;
-/// use tensors::linalg::Vector;
+/// use tensorrs::vector;
+/// use tensorrs::linalg::Vector;
 /// let a = vector![1, 2, 3];
 /// ```
 #[macro_export]
@@ -29,7 +29,7 @@ macro_rules! vector {
 ///
 /// # Example
 /// ```rust
-/// use tensors::linalg::Vector;
+/// use tensorrs::linalg::Vector;
 ///
 /// let v1 = Vector::from_num(1, 3);
 /// let v2 = Vector::from_num(2, 3);
@@ -49,7 +49,7 @@ impl<T: Num> Vector<T> {
     ///
     /// # Example
     ///```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     ///
     /// let a = Vector::from_num(1, 2);//{1 1}
     /// ```
@@ -62,7 +62,7 @@ impl<T: Num> Vector<T> {
     /// # Logic
     ///
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     ///
     /// let a = Vector::from(vec![1, 2, 3]);
     /// let b = Vector::from(vec![1, 2, 3]);
@@ -80,7 +80,7 @@ impl<T: Num> Vector<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     /// let a = Vector::range(1.0, 4.0, 2.0).unwrap();//{1 3}
     /// ```
     pub fn range(start: T, end: T, step: T) -> Result<Self, &'static str> {
@@ -111,7 +111,7 @@ impl<T: Num> Vector<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     ///
     /// let a = Vector::from(vec![1, 2, 3]);
     /// a.len();//3
@@ -132,14 +132,14 @@ impl<T: Num> Vector<T> {
     /// # Examples
     ///
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     ///
     /// let vector = Vector::from_num(10,1);//{10}
     ///	let new_vector = vector.resize(2);//{10 0}
     /// ```
     ///
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     ///
     /// let vector = Vector::from_num(10, 2);//{10 10}
     /// let new_vector = vector.resize(1);//{10}
@@ -191,8 +191,8 @@ impl<T: Num> Vector<T> {
     /// # Example
     /// ```
     ///
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     /// let a = matrix![[1,1], [2,3]];
     /// a.map(|x| x + 1);
     /// // [{2, 2},
@@ -207,6 +207,64 @@ impl<T: Num> Vector<T> {
             data: new_data,
             length: self.length,
         }
+    }
+
+    pub fn max_val(&self) -> Option<T> {
+        if self.data.len() == 0 {
+            return None
+        }
+        let mut max_value = self.data[0];
+        for i in 1..self.data.len() {
+            if self.data[i] > max_value {
+                max_value = self.data[i];
+            }
+        }
+        Some(max_value)
+    }
+
+    /// Computes the outer product of two vectors.
+    ///
+    /// # Example
+    /// ```
+    ///
+    ///
+    /// use tensorrs::linalg::{Matrix, Vector};
+    /// use tensorrs::matrix;
+    /// let a = Vector::from(vec![1.0, 2.0, 3.0]);
+    /// let b = Vector::from(vec![4.0, 5.0]);
+    /// let outer_product = a.outer(&b);
+    ///
+    /// assert_eq!(outer_product,
+    /// matrix![[4.0, 5.0],
+    ///     [8.0, 10.0],
+    ///     [12.0, 15.0]]);
+    /// ```
+    pub fn outer(&self, other: &Vector<T>) -> Matrix<T> {
+        let mut result_data = vec![T::default(); self.length * other.length];
+
+        result_data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, val)| {
+                let i = idx / other.length;
+                let j = idx % other.length;
+                *val = self.data[i] * other.data[j];
+            });
+
+        Matrix {
+            data: result_data,
+            rows: self.length,
+            cols: other.length,
+        }
+    }
+
+    pub fn argmax(&self) -> usize {
+        self.data
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map(|(index, _)| index)
+            .unwrap_or(0)
     }
 }
 
@@ -237,7 +295,7 @@ impl<T: Float> Vector<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::linalg::Vector;
     /// let a = Vector::from(vec![4.0, 3.0]);
     /// println!("{}", a.length());
     /// //5
@@ -256,8 +314,8 @@ impl<T: Float> Vector<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::vector;
-    /// use tensors::linalg::Vector;
+    /// use tensorrs::vector;
+    /// use tensorrs::linalg::Vector;
     /// let a = vector![1.0, 0.0];
     ///
     /// println!("{}", a);

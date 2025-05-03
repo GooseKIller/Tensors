@@ -12,8 +12,8 @@ use std::ops::{Index, IndexMut};
 ///
 /// # Example
 /// ```
-/// use tensors::linalg::Matrix;
-/// use tensors::matrix;
+/// use tensorrs::linalg::Matrix;
+/// use tensorrs::matrix;
 ///
 /// let matrix_a = matrix![[1,2,3],
 ///                     [4,5,6],
@@ -47,7 +47,7 @@ macro_rules! matrix {
 ///
 /// # Example
 /// ```rust
-/// use tensors::linalg::Matrix;
+/// use tensorrs::linalg::Matrix;
 ///
 /// let a = Matrix::from_num(0, 2, 2);
 /// let b = Matrix::from_num(1, 2, 2);
@@ -79,7 +79,7 @@ impl<T: Num> Matrix<T> {
     /// Create matrix from vector and usize, usize
     /// # Example
     /// ```
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let example = Matrix::new(vec![0, -1, -1, 0], 2, 2);
     /// // Will create matrix
     /// // [0 -1]
@@ -99,7 +99,7 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let a:Matrix<f64> = Matrix::zeros([3, 2]);
     /// // matrix![{0, 0},
     /// //         {0, 0},
@@ -118,7 +118,7 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let matrix_a = Matrix::from_num(1, 2, 2);
     /// //[1 1]
     /// //[1 1]
@@ -126,6 +126,24 @@ impl<T: Num> Matrix<T> {
     pub fn from_num(num: T, rows: usize, cols: usize) -> Self {
         Self {
             data: vec![num; rows * cols],
+            rows,
+            cols,
+        }
+    }
+
+    pub fn from_fn<F>(rows: usize, cols: usize, f: F) -> Self
+    where
+        F: Fn(usize, usize) -> T + Sync + Send {
+        let mut data = vec![T::default(); rows*cols];
+
+        data.par_iter_mut().enumerate().for_each(|(idx, item)| {
+            let i = idx / cols;
+            let j = idx % cols;
+            *item = f(i, j);
+        });
+
+        Self {
+            data,
             rows,
             cols,
         }
@@ -164,8 +182,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::DataType;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::DataType;
+    /// use tensorrs::linalg::Matrix;
     /// let a:Matrix<f64> = Matrix::identity(DataType::f64(), 2, 2);
     /// // will create matrix
     /// // [1 0]
@@ -192,7 +210,7 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     ///```
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let a = Matrix::from_num(10, 2, 1);
     /// let a = a.get_data();
     /// // should return vec![10, 10]
@@ -206,8 +224,8 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     ///
     /// let a = matrix![[1], [2]];
     /// println!("SHAPE:{:?}", a.shape());//[2, 1]
@@ -239,8 +257,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::{Matrix, Vector};
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::{Matrix, Vector};
+    /// use tensorrs::matrix;
     /// let example = matrix![[1,2],
     ///                     [3,4]];
     /// let col:Vector<i32> = example.get_col(0);// [1 3]
@@ -264,8 +282,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let example = matrix![[1., 2.], [3., 4.]];
     /// let rem_example = example.rem_col(1);
     /// assert_eq!(rem_example,
@@ -291,8 +309,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::{Matrix, Vector};
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::{Matrix, Vector};
+    /// use tensorrs::matrix;
     /// let example = matrix![[1,2],
     ///                     [3,4]];
     /// let col:Vector<i32> = example.get_row(1);//[1 2]
@@ -315,8 +333,8 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let matrix = matrix![[1,2],
     ///                     [3,4]];
     /// let example = matrix.transpose();
@@ -342,8 +360,8 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let mut a = matrix![[1, 1],
     ///                      [1, 1]];
     ///
@@ -368,8 +386,8 @@ impl<T: Num> Matrix<T> {
     /// # Example
     ///
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let mut a = matrix![[1, 1],
     ///                      [1, 1]];
     ///
@@ -396,8 +414,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// ```
     ///
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let a = matrix![[1.0, 2.0]];
     /// a.get_resize(1, 1);// will get matrix![[1.0]];
     /// a.get_resize(2, 2);// will get matrix![[1.0, 2.0], [0.0, 0.0]]
@@ -426,8 +444,8 @@ impl<T: Num> Matrix<T> {
     /// panics if their shapes are different
     /// # Example
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let a = matrix![[1, 3, -1]];
     /// let b = matrix![[0, 4, -1]];
     ///
@@ -442,13 +460,21 @@ impl<T: Num> Matrix<T> {
             other.shape()
         );
         let mut comparisons = vec![T::default(); self.rows * self.cols];
+        comparisons.par_iter_mut().enumerate().for_each(|(i, x)| {
+            if self.data[i] > other.data[i] {
+                *x = T::from(1);
+            } else if self.data[i] < other.data[i] {
+                *x = T::from(1).neg();
+            }
+        });
+        /*
         for i in 0..self.data.len() {
             if self.data[i] > other.data[i] {
                 comparisons[i] = T::from(1);
             } else if self.data[i] < other.data[i] {
                 comparisons[i] = T::from(1).neg();
             }
-        }
+        }*/
         Matrix::new(comparisons, self.rows, self.cols)
     }
 
@@ -456,8 +482,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     ///```
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     /// let a = matrix![[5,0,-3]];
     /// println!("{}", a.compare_num(0));//[{1, 0 ,-1}]
     ///```
@@ -484,8 +510,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     ///```
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     /// let a = matrix![[2, 3, 1], [0, 8, -2]];
     /// let b = matrix![[3, 1, 4], [7, 9, 5]];
     /// assert_eq!(&a & &b,
@@ -516,8 +542,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     ///
     /// let a = matrix![[1, 2], [3, 4]];
     /// let b = matrix![[0, 5], [6, 7]];
@@ -548,8 +574,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::matrix;
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
     /// let a = matrix![[1,2], [3,4]];
     /// let b = a.map(|x| x % 2);
     /// // [{1 0},
@@ -571,7 +597,7 @@ impl<T: Num> Matrix<T> {
     ///
     /// /// # Example
     /// ```rust
-    /// use tensors::linalg::Matrix;
+    /// use tensorrs::linalg::Matrix;
     ///
     /// let a = Matrix::from_num(1, 2, 2);
     /// let b = Matrix::from_num(2, 2, 2);
@@ -601,8 +627,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     /// let a = matrix![[1.0, 2.0], [0.0, -1.0]];
     /// let b = a.max(0.);
     /// assert_eq!(
@@ -620,8 +646,8 @@ impl<T: Num> Matrix<T> {
     ///
     /// # Example
     /// ```
-    /// use tensors::linalg::Matrix;
-    /// use tensors::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
     /// let a = matrix![[1.0, 2.0], [0.0, -1.0]];
     /// let b = a.min(0.);
     /// assert_eq!(
@@ -773,6 +799,9 @@ impl<T: Num> Clone for Matrix<T> {
 
 // Float Number implementation
 impl<T: Float> Matrix<T> {
+    /// Creates a matrix with random numbers(between 0 and 1)
+    /// This is achieved using the [Box-Muller transform](https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform), which generates normally distributed random numbers
+    /// from uniformly distributed random numbers.
     pub fn randn(row: usize, col: usize) -> Self
     where
         Standard: Distribution<T>,
@@ -781,7 +810,7 @@ impl<T: Float> Matrix<T> {
             data: vec![T::default(); row * col]
                 .iter()
                 .map(|_| {
-                    (-T::from(2) * random::<T>().ln()).sqrt()
+                    (-T::from(2) * random::<T>().ln()).sqrt() // Bpx - Muller Method
                         * (T::from(2) * T::pi() * random::<T>()).cos()
                 })
                 .collect(),
@@ -904,6 +933,19 @@ mod tests {
     use crate::{vector, DataType};
     use std::time::Instant;
 
+    #[test]
+    fn from_fn() {
+        let matrix = Matrix::<i32>::from_fn(3, 3, |i, j| (i * 10 + j) as i32);
+
+        assert_eq!(matrix.data, vec![0, 1, 2, 10, 11, 12, 20, 21, 22]);
+    }
+
+    #[test]
+    fn mat_and_scalar() {
+        let a = matrix![[1.0]];
+        let b = matrix![[1.0, 2.0], [3.0, 4.0]];
+        println!("{}", b * &a);
+    }
     #[test]
     fn mat_and_num() {
         let a = matrix![[1, 2], [1, 2]];

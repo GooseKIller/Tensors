@@ -11,13 +11,13 @@
 //!
 //! ## Example
 //! ```rust
-//! use tensors::activation::Function;
-//! use tensors::DataType;
-//! use tensors::linalg::{Matrix, Vector};
-//! use tensors::nn::{Linear, Sequential};
-//! use tensors::optim::Adam;
-//! use tensors::loss::MSE;
-//! use tensors::loss::Loss;
+//! use tensorrs::activation::Function;
+//! use tensorrs::DataType;
+//! use tensorrs::linalg::{Matrix, Vector};
+//! use tensorrs::nn::{Linear, Sequential};
+//! use tensorrs::optim::Adam;
+//! use tensorrs::loss::MSE;
+//! use tensorrs::loss::Loss;
 //!
 //! let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
 //! let y:Matrix<f32> = 8.0 * &x - 10.0;
@@ -66,6 +66,7 @@ pub trait Num:
     + Debug
     + Sync
     + Send
+    + PartialOrd
     + 'static
 {
 }
