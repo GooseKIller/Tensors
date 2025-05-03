@@ -3,7 +3,7 @@ use crate::Float;
 
 mod autodiff;
 
-pub use autodiff::*;
+//pub use autodiff::*;
 
 /// Performs one-hot encoding on a vector of categorical indices.
 ///

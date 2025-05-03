@@ -589,7 +589,7 @@ impl<T: Num> From<Vec<Vec<Vec<T>>>> for Tensor<T> {
                     "!!!Inconsistent d3 (columns) at layer {}, row {}: expected {}, got {}!!!",
                     i,
                     j,
-                    d3
+                    d3,
                     row.len()
                 );
             }
