@@ -3,7 +3,10 @@ name = "tensorrs"
 version = "0.2.0"
 authors = ["Anton Krop antonjobonly@gmail,com"]
 edition = "2021"
+description = "Tensors is a lightweight machine learning library in Rust"
 repository = "https://github.com/GooseKIller/Tensors"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 rustdoc-args = [
