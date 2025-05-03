@@ -10,13 +10,11 @@ The library uses the following dependencies:
 - [serde](https://crates.io/crates/serde) - for saving models.
 - [serde_json](https://crates.io/crates/serde_json) - for loading models.
 
-## Installation
-
-Since the library is not yet published on crates.io, you can add it to your project by specifying the path to your local copy in your `Cargo.toml`:
+Add `tensorrs` to your project using [crates.io](https://crates.io/crates/tensorrs):
 
 ```toml
 [dependencies]
-tensors = { path = "../path_to_tensors" }
+tensorrs = "0.2.0"
 ```
 
 ## Example Usage

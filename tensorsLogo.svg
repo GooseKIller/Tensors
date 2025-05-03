@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 70 180 180">
+    <!-- Main green box -->
+    <rect x="100" y="100" width="150" height="150" rx="20" fill="#9ce464"/>
+    
+    <!-- Top gray box -->
+    <path d="M150,80 A10 10 0 0 1 160,70 H190 A10 10 0 0 1 200,80 V100 H150 V80Z" fill="#808080"/>
+    
+    <!-- Right side gray box -->
+    <path d="M250,150 H270 A10 10 0 0 1 280,160 V190 A10 10 0 0 1 270,200 H250 V150Z" fill="#808080"/>
+    
+    <!-- Inner gray box -->
+    <rect x="150" y="150" width="50" height="50" rx="10" fill="#808080"/>
+</svg>
