@@ -1,2 +1,6 @@
 /target
 /Cargo.lock
+# macOS
+.DS_Store
+# JetBrains IDE
+.idea/
