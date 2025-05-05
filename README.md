@@ -1,16 +1,26 @@
-# Tensors
-Tensors is a lightweight machine learning library in Rust. It provides a simple and efficient way to create and train machine learning models with minimal dependencies.
+# Tensorrs
+
+**Tensorrs** is a lightweight machine learning library written in Rust.  
+It provides a simple and efficient way to build and train neural networks with minimal dependencies.
+
+## Huge Warning
+
+**Tensorrs is currently in alpha version.**  
+The API is unstable — function names, argument types, and behaviors may change at any time.  
+Use at your own risk and pin exact versions if needed.
 
 ## Dependencies
 
-The library uses the following dependencies:
+Tensorrs uses the following crates:
 
-- [rayon](https://crates.io/crates/rayon) - for parallel computations on CPU.
-- [rand](https://crates.io/crates/rand) - for random number generation.
-- [serde](https://crates.io/crates/serde) - for saving models.
-- [serde_json](https://crates.io/crates/serde_json) - for loading models.
+- [`rayon`](https://crates.io/crates/rayon) — for parallel CPU computations
+- [`rand`](https://crates.io/crates/rand) — for random number generation
+- [`serde`](https://crates.io/crates/serde) — for model serialization
+- [`serde_json`](https://crates.io/crates/serde_json) — for model deserialization
 
-Add `tensorrs` to your project using [crates.io](https://crates.io/crates/tensorrs):
+## Installation
+
+Add `tensorrs` to your project from [crates.io](https://crates.io/crates/tensorrs):
 
 ```toml
 [dependencies]
@@ -19,12 +29,12 @@ tensorrs = "0.2.0"
 
 ## Example Usage
 ```rust
-use tensors::activation::{Function, Sigmoid};
-use tensors::{DataType, matrix};
-use tensors::linalg::Matrix;
-use tensors::loss::SSE;
-use tensors::nn::{Linear, Sequential};
-use tensors::optim::Adam;
+use tensorrs::activation::{Function, Sigmoid};
+use tensorrs::{DataType, matrix};
+use tensorrs::linalg::Matrix;
+use tensorrs::loss::SSE;
+use tensorrs::nn::{Linear, Sequential};
+use tensorrs::optim::Adam;
 // simple xor gate realization
 fn main() {
     //input data
@@ -78,6 +88,8 @@ If you'd like to contribute to Tensors, please follow these steps:
 
 3. Submit a pull request with a detailed description of your changes.
 
+See [CONTRIBUTING](assets/CONTRIBUTING.md) for more details
+
 ## License
 
-Tensors is licensed under the MIT License. See [LICENSE](LICENSE) for more details.
+Tensors is licensed under the MIT License. See [LICENSE](assets/LICENSE) for more details.
