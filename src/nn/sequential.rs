@@ -4,10 +4,50 @@ use crate::loss::Loss;
 use crate::nn::Linear;
 use crate::optim::Optimizer;
 use crate::Float;
+use onnx_pb::{
+    ModelProto, GraphProto, TensorProto, NodeProto, ValueInfoProto, TypeProto,
+    type_proto::Value as TypeProtoValue,
+    type_proto::Tensor as OnnxTensor,
+    tensor_shape_proto::Dimension as TensorShapeDimension,
+    TensorShapeProto,
+};
+use prost::Message;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::ops::Index;
 use std::{fs, io};
+use onnx_pb::tensor_shape_proto::dimension::Value::DimValue;
+//use onnx_protobuf::Message;
+//use crate::onnx_pb::tensor_proto::DataLocation::Default;
+
+fn create_value_info(name: &str, dims: Vec<i64>, elem_type: i32) -> ValueInfoProto {
+    let shape = TensorShapeProto {
+        dim: dims
+            .into_iter()
+            .map(|d| TensorShapeDimension {
+                denotation: "".to_string(),
+                value: Some(DimValue(d)),
+            })
+            .collect(),
+    };
+
+    let tensor_type = onnx_pb::type_proto::Tensor {
+        elem_type,
+        shape: Some(shape),
+    };
+
+    let type_proto = TypeProto {
+        value: Some(TypeProtoValue::TensorType(tensor_type)),
+        denotation: String::new(),
+    };
+
+    ValueInfoProto {
+        name: name.to_string(),
+        r#type: Some(type_proto),
+        doc_string: String::new(),
+    }
+}
+
 
 #[derive(Serialize, Deserialize)]
 struct ModelArchitecture {
@@ -201,6 +241,86 @@ impl<T: Float> Sequential<T> {
 
         return loss;
     }
+/*
+    fn create_tensor(name: &str, data: &[T], shape: &[i64]) -> TensorProto {
+        TensorProto {
+            name: Some(name.to_string()),
+            dims: shape.to_vec(),
+            data_type:
+        }
+    }
+
+    fn save_linear(&self, layer: Box<dyn Function<T>>) -> NodeProto {
+        let weights = layer.get_weights().unwrap();
+        let bias = layer.get_bias().unwrap();
+
+        let w_data:Vec<T> = weights.data.clone();
+        let w_shape = vec![weights.rows as i64, weights.cols as i64];
+
+        let w_= TensorProto
+    }
+
+ */
+
+    pub fn save_onnx(&self, name: &str) -> io::Result<()> {
+        let mut nodes: Vec<NodeProto> = Vec::new();
+        let mut initializers: Vec<TensorProto> = Vec::new();
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+
+        let mut previous_output = "input".to_string();
+
+        for (i, layer) in self.layers.iter().enumerate() {
+            if layer.is_linear() {
+                let lname = format!("layer_{}", i);
+                let (node, mut tensors) = layer.get_onnx(lname.as_str()).expect("HOW");
+
+                if i == 0 {
+                    let input_dim = tensors[0].dims[0];
+                    inputs.push(create_value_info(
+                        "input",
+                        vec![1, input_dim],
+                        tensors[0].data_type));
+                }
+
+                let output_dim = tensors[0].dims[1];
+                let output_name = node.output[0].clone();
+                outputs.clear();
+                outputs.push(create_value_info(&output_name, vec![1, output_dim], tensors[0].data_type));
+
+                previous_output = output_name.clone();
+
+                nodes.push(node);
+                initializers.append(&mut tensors);
+            }
+        }
+
+        let graph = GraphProto {
+            name: "TensorsModel".to_string(),
+            node: nodes,
+            initializer: initializers,
+            input: inputs,
+            output: outputs,
+            ..Default::default()
+        };
+
+        /*
+        let model = ModelProto {
+            ir_version: 8,
+            producer_name: "tensors".to_string(),
+            graph: Some(graph),
+            ..Default::default()
+        };
+
+        model.write_to_vec().map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("ONNX encoding failed: {}", e))
+            })?;
+
+         */
+
+        Ok(())
+
+    }
 
     pub fn save(&self, name: &str) -> io::Result<()> {
         fs::create_dir_all(name)?;
@@ -280,13 +400,13 @@ impl<T: Float> Index<usize> for Sequential<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::activation::{Function, Sigmoid, Tanh};
+    use crate::activation::{Function, Sigmoid, SoftMax,};
     use crate::linalg::{Matrix, Vector};
     use crate::loss::{CrossEntropy, MSE, SSE};
     use crate::nn::sequential::Sequential;
     use crate::nn::Linear;
     use crate::optim::{Adam, SGD};
-    use crate::{matrix, DataType};
+    use crate::{matrix, DataType,};
     use crate::utils::one_hot_encoding;
 
     #[test]
@@ -339,33 +459,28 @@ mod test {
 
     #[test]
     fn classification() {
-        let x = Matrix::from(Vector::range(0., 10., 0.1).unwrap());
-        let f = |x: f32| if x < 5. {0.} else { 1. };
-        let y = x.map(f);
+        let x = Matrix::from(Vector::range(0., 10., 0.5).unwrap());
+        //let f = |x: f32| if x < 5. {0.} else { 1. };
+        let y = Matrix::from(one_hot_encoding(
+            x.data.iter().map(|x| if x < &5. {0} else {1}).collect(),
+            2,
+            DataType::f32()
+        ));
+        let _weights = matrix![[0.5, 0.5], [1.0, 1.0]];
 
-        let layers: Vec<Box<dyn Function<f32>>> = vec![
-            Box::new(Linear::new(1, 1, true)), // Линейный слой с 1 входом и 2 выходами (для двух классов)
-            Box::new(Tanh::new()),         // Функция активации Softmax для классификации
+        let layers: Vec<Box<dyn Function<f32>>> = vec![//Box::new(Linear::from(weights)),
+            Box::new(Linear::new(1, 2, true)), // Линейный слой с 1 входом и 2 выходами (для двух классов)
+            Box::new(SoftMax::new()),         // Функция активации Softmax для классификации
         ];
 
-        let mut optim = Adam::new(0.001, &layers);
+        let mut optim = Adam::new(0.1, &layers);
         let mut model = Sequential::new(layers);
         let loss = CrossEntropy::new(DataType::f32());
 
-        let _y_data = Matrix::from(
-            one_hot_encoding(
-                y.get_data()
-                .iter().
-                map(|x| *x as usize)
-                .collect::<Vec<usize>>(),
-            2,
-                0.0f32)
-        );
-
-        for i in 0..10000 {
+        for i in 0..1000 {
             let loss_num = model.train(
                 x.transpose(),
-                y.transpose(),
+                y.clone(),
                 &mut optim,
                 &loss
             );
@@ -374,19 +489,13 @@ mod test {
             }
         }
 
-        let test_values = vec![2.0, 4.0, 6.0, 8.0];
+        let test_values = vec![2.0, 4.0, 5.5, 6.0, 8.0];
         for &num in &test_values {
             let prediction = model.forward(matrix![[num]]);
-            println!("{}", prediction);
-            /*
-            let preds = Vector::from(prediction);
-            println!("Input: {}, Predicted class: {}", num, preds.argmax());
-             */
             println!("Input: {}, Predicted class: {}",
                      num,
-                     prediction.compare_num(0.5))
+                     prediction.map(|x| x.round()))
         }
         println!("{}", model[0].get_data().unwrap())
-
     }
 }
