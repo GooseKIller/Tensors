@@ -2,25 +2,18 @@ use crate::activation::Function;
 use crate::linalg::Matrix;
 use crate::Float;
 
-/// Exponential Linear Unit (ELU) activation function.
+/// Sigmoid activation function.
 ///
-/// Maps input values such that:
-/// - For `x >= 0`: returns `x`
-/// - For `x < 0`: returns `α * (e^x - 1)`
+/// Maps input values into the range (0, 1) using the logistic function.
 ///
 /// # Mathematical Definition
-/// For an input `x`, the ELU function is defined as:
+/// For an input `x`, the Sigmoid function is defined as:
 /// ```math
-/// \text{ELU}(x) = \left\{
-/// \begin{array}{ll}
-/// x & \text{if } x \geq 0 \\
-/// \alpha \left( e^x - 1 \right) & \text{if } x < 0
-/// \end{array}
-/// \right.
+/// Sigmoid(x) = \frac{1}{1 + e^{-x}}
 /// ```
 ///
 /// # See Also
-/// - [Wikipedia: Exponential Linear Unit](https://en.wikipedia.org/wiki/Exponential_linear_unit)
+/// - [Wikipedia: Logistic function](https://en.wikipedia.org/wiki/Logistic_function)
 
 pub struct Sigmoid;
 

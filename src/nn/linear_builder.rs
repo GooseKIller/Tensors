@@ -4,6 +4,7 @@ use crate::nn::Linear;
 use crate::linalg::Matrix;
 use rand::prelude::Distribution;
 use rand::distributions::Standard;
+use crate::nn::Initializer::FromMatrix;
 
 /// Test more safe Implementation for Linear
 pub struct LinearBuilder<T: Float> {
@@ -13,11 +14,13 @@ pub struct LinearBuilder<T: Float> {
     initializer: Initializer<T>
 }
 
+#[derive(Clone)]
 pub enum Initializer<T: Float> {
     Xavier,
     Zeros,
     He,
     Custom(fn(usize, usize, bool) -> Matrix<T>),
+    FromMatrix(Matrix<T>),
 }
 
 impl<T: Float> LinearBuilder<T>
@@ -56,15 +59,51 @@ where
         self
     }
 
+    pub fn with_matrix(mut self, matrix: Matrix<T>) -> Self {
+        self.initializer = FromMatrix(matrix);
+        self
+    }
+
     pub fn build(self) -> Result<Linear<T>, String> {
-        let input_size = self.input_size.ok_or("!!!Input size must be specified!!!")?;
-        let output_size = self.output_size.ok_or("!!!Output size must be specified!!!")?;
+        let (input_size, output_size) = match self.initializer.clone() {
+            FromMatrix(mx) => {
+                let excepted_input = mx.rows;
+                let expected_output = mx.cols;
+
+                if let Some(input) = self.input_size {
+                    if input != excepted_input {
+                        return Err(format!(
+                            "!!! Input size {} doesn't match matrix rows {} with bias {}!!!",
+                            input, mx.rows, self.bias
+                        ));
+                    }
+                }
+
+                if let Some(output) = self.output_size {
+                    if output != expected_output {
+                        return Err(format!(
+                            "Output size {} doesn't match matrix columns {}",
+                            output, mx.cols
+                        ));
+                    }
+                }
+                (excepted_input, expected_output)
+            }
+            _ => {
+                let input_size = self.input_size.ok_or("!!!Input size must be specified!!!")?;
+                let output_size = self.output_size.ok_or("!!!Output size must be specified!!!")?;
+                (input_size, output_size)
+            }
+        };
+        //let input_size = self.input_size.ok_or("!!!Input size must be specified!!!")?;
+        //let output_size = self.output_size.ok_or("!!!Output size must be specified!!!")?;
 
         let matrix = match self.initializer {
             Initializer::Xavier => self.xavier_init(input_size, output_size),
             Initializer::Zeros => self.zeros_init(input_size, output_size),
             Initializer::He => self.he_init(input_size, output_size),
             Initializer::Custom(func) => func(input_size, output_size, self.bias),
+            FromMatrix(mx) => mx,
         };
 
         Ok(Linear{
@@ -125,6 +164,7 @@ where
 mod tests {
     use super::*;
     use crate::linalg::Matrix;
+    use crate::matrix;
 
     #[test]
     fn test_builder_basic() {
@@ -211,5 +251,16 @@ mod tests {
             assert!(value >= -expected_std * 2.0 && value <= expected_std * 2.0,
                     "Value {} out of expected range", value);
         }
+    }
+
+    #[test]
+    fn test_matrix_init() {
+        let layer = LinearBuilder::<f32>::new()
+            .with_matrix(matrix![[1.0, 2.0], [3.0, 4.0]])
+            .with_bias(false)
+            .build()
+            .unwrap();
+
+        println!("MX:{} Bias: {}", layer.matrix, layer.bias);
     }
 }

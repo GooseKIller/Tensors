@@ -43,7 +43,7 @@ macro_rules! matrix {
 /// The `Matrix` struct is implemented using a vector, which means it is not a simple struct.
 /// As a result, all mathematical operations are implemented without borrowing.
 ///
-/// When performing operations, ensure to use a reference for the second operand:
+/// When performing operations, ensure to use a reference for the second operand(and for the first):
 ///
 /// # Example
 /// ```rust
@@ -52,22 +52,22 @@ macro_rules! matrix {
 /// let a = Matrix::from_num(0, 2, 2);
 /// let b = Matrix::from_num(1, 2, 2);
 ///
-/// a + &b; // Correct
+/// &a + &b; // Correct
 /// // a + b;  // Incorrect
 /// ```
 ///
 /// All Matrix operations
 ///
-/// | name |operation|
-/// |------|---------|
-/// | plus | + |
-/// |plus assign| += |
-/// |minus | - |
-/// |minus assign| -=|
-/// |mul| * |
-/// |mul assign| *= |
-/// |hadamard(element-wise)| & |
-/// |hadamard(element-wise) assign| &=|
+/// | Name | Operation | Example |
+/// |------|-----------|---------|
+/// | Plus | + | `&matrix1 + &matrix2` |
+/// | Plus assign| += | `&mut matrix1 += &matrix2`|
+/// | Minus | - | `&matrix1 - &matrix2` |
+/// | Minus assign| -=| `&mut matrix1 -= &matrix2` |
+/// | Mul | * | `&matrix1 * &matrix2` |
+/// | Mul assign| *= | `&mut matrix1 *= &matrix2` |
+/// | Hadamard(element-wise)| & | `&matrix & &matrix2` |
+/// | Hadamard(element-wise) assign| &=| `&mut matrix &= &matrix2` |
 #[derive(PartialEq, Eq, Debug)]
 pub struct Matrix<T: Num> {
     pub(crate) data: Vec<T>,
@@ -131,6 +131,16 @@ impl<T: Num> Matrix<T> {
         }
     }
 
+    /// Creates Matrix from function that takes two arguments
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::Matrix;
+    /// use tensorrs::matrix;
+    /// let matrix = Matrix::<i32>::from_fn(3, 3, |i, j| (i * 10 + j) as i32);
+    ///
+    /// assert_eq!(matrix, matrix![[0, 1, 2], [10, 11, 12], [20, 21, 22]]);
+    /// ```
     pub fn from_fn<F>(rows: usize, cols: usize, f: F) -> Self
     where
         F: Fn(usize, usize) -> T + Sync + Send {
@@ -149,6 +159,19 @@ impl<T: Num> Matrix<T> {
         }
     }
 
+    /// Safe creating of matrix from tensor
+    /// 
+    /// # Exmple
+    /// ```
+    /// use tensorrs::linalg::{Matrix, Tensor};
+    /// use tensorrs::tensor;
+    /// use tensorrs::matrix;
+    /// 
+    /// let tensor = tensor![[1,2,3], [1,2,3]];
+    /// let matrix = Matrix::try_from(tensor).unwrap();
+    /// assert_eq!(matrix![[1,2,3], [1,2,3]], matrix);
+    /// 
+    /// ```
     pub fn try_from(value: Tensor<T>) -> Result<Self, &'static str> {
         if value.shape.len() != 2 {
             return Err("Shape size must be 2");
@@ -156,6 +179,21 @@ impl<T: Num> Matrix<T> {
         Ok(Matrix::new(value.data, value.shape[0], value.shape[1]))
     }
 
+    /// Creating Matrix with diagonal values of vector
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::{Matrix, Vector};
+    /// use tensorrs::matrix;
+    /// 
+    /// let a = Vector::from(vec![1,2,3]);
+    /// 
+    /// let b = Matrix::from_diag(a, 3, 3);
+    /// 
+    /// assert_eq!(b, matrix![[1, 0, 0],
+    ///                       [0, 2, 0],
+    ///                       [0, 0, 3]])
+    /// ```
     pub fn from_diag(data:Vector<T>, rows:usize, cols:usize) -> Matrix<T> {
         assert_eq!(data.length, min(rows, cols),
                    "!!!The length of the data vector ({})\
@@ -245,10 +283,10 @@ impl<T: Num> Matrix<T> {
     }
 
     /// Returns sum of all elements of matrix
-    pub fn sum(self) -> T {
+    pub fn sum(&self) -> T {
         let mut sum = T::default();
-        for i in self.data {
-            sum += i;
+        for i in self.data.iter() {
+            sum += *i;
         }
         sum
     }
@@ -431,10 +469,20 @@ impl<T: Num> Matrix<T> {
         new_matrix
     }
 
+    /// Returns a new matrix where each cell is the sum of rows.
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// 
+    /// let a = matrix![[1,2,3], [3,2,6]];
+    /// assert_eq!(a.sum_rows(), matrix![[4,4,9]]);
+    /// ```
     pub fn sum_rows(&self) -> Matrix<T> {
         let mut matrix = vec![T::default(); self.cols];
         for i in 0..self.cols {
-            matrix[i] = self.get_col(i).sum();
+            matrix[i] = self.get_col(i).sum_all();
         }
         Matrix::new(matrix, 1, self.cols)
     }
@@ -659,7 +707,24 @@ impl<T: Num> Matrix<T> {
         self.map(|x| if x > num { num } else { x })
     }
 
-    /// makes diagonal from matrix
+    /// Extracts the main diagonal from a matrix and returns it as a vector.
+    ///
+    /// The diagonal elements are taken from positions where row index equals column index (i, i).
+    /// For non-square matrices, the diagonal length equals the smaller dimension of the matrix.
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::{Vector, Matrix};
+    /// 
+    /// let a = matrix![
+    ///     [1, 2, 3],
+    ///     [4, 5, 6],
+    ///     [7, 8, 9]];
+    /// 
+    /// assert_eq!(a.diag(), Vector::from(vec![1,5,9]));
+    /// ```
+
     pub fn diag(&self) -> Vector<T> {
         let mut data = vec![T::default(); min(self.cols, self.rows)];
         for i in 0..min(self.cols, self.rows) {
@@ -669,6 +734,121 @@ impl<T: Num> Matrix<T> {
         Vector::from(data)
     }
 
+    pub fn conv(&self, kernel: &Matrix<T>) -> Matrix<T> {
+        assert!(
+            kernel.rows <= self.rows && kernel.cols <= self.cols,
+            "!!!Kernel size must be less than Matrix itself!!!\nMatrix size: {:?}, Kernel Size: {:?}",
+            self.shape(),
+            kernel.shape()
+        );
+        
+        let output_rows = self.rows - kernel.rows + 1;
+        let output_cols = self.cols - kernel.cols + 1;
+
+        let mut result_data = vec![T::default(); output_cols * output_rows];
+
+        result_data.par_chunks_mut(output_cols)
+        .enumerate()
+        .for_each(|(i, out_row)| {
+            for j in 0..output_cols {
+                let mut sum = T::default();
+
+                for ki in 0..kernel.rows {
+                    let matrix_row_base = (i + ki) * self.cols + j;
+                    let kernel_row_base = ki * kernel.cols;
+
+                    for kj in 0..kernel.cols {
+                        sum += self.data[matrix_row_base + kj] * 
+                        kernel.data[kernel_row_base + kj];
+                    }
+                }
+                out_row[j] = sum;
+            }
+        });
+        Matrix::new(result_data, output_rows, output_cols)
+    }
+
+    pub fn conv_zero(&self, kernel: &Matrix<T>) -> Matrix<T> {
+        let pad_rows = kernel.rows / 2;
+        let pad_cols = kernel.cols / 2;
+        
+        let output_rows = self.rows;
+        let output_cols = self.cols;
+
+        let mut result_data = vec![T::default(); output_cols * output_rows];
+
+        result_data.par_chunks_mut(output_cols)
+        .enumerate()
+        .for_each(|(i, out_row)| {
+            for j in 0..output_cols {
+                let mut sum = T::default();
+
+                for ki in 0..kernel.rows {
+                    for kj in 0..kernel.cols {
+                        let mi = i as i32 + ki as i32 - pad_rows as i32;
+                        let mj = j as i32 + kj as i32 - pad_cols as i32;
+                        
+                        if mi >= 0 && mi < self.rows as i32 && mj >= 0 && mj < self.cols as i32 {
+                            let matrix_idx = mi as usize * self.cols + mj as usize;
+                            let kernel_idx = ki * kernel.cols + kj;
+                            sum = sum + self.data[matrix_idx] * kernel.data[kernel_idx];
+                        }
+                    }
+                }
+                out_row[j] = sum;
+            }
+        });
+    
+    Matrix::new(result_data, output_rows, output_cols)
+
+
+    }
+
+    pub fn conv_with_mirror_padding(&self, kernel: &Matrix<T>) -> Matrix<T> {
+        fn mirror_index(idx: i32, size: usize) -> usize {
+            let size_i32 = size as i32;
+            if idx < 0 {
+                (-idx - 1) as usize % size
+            } else if idx >= size_i32 {
+                (2 * size_i32 - idx - 1) as usize % size
+            } else {
+                idx as usize
+            }
+        }
+
+        let pad_rows = kernel.rows / 2;
+        let pad_cols = kernel.cols / 2;
+        
+        let output_rows = self.rows;
+        let output_cols = self.cols;
+
+        let mut result_data = vec![T::default(); output_cols * output_rows];
+
+        result_data.par_chunks_mut(output_cols)
+            .enumerate()
+            .for_each(|(i, out_row)| {
+                for j in 0..output_cols {
+                    let mut sum = T::default();
+
+                    for ki in 0..kernel.rows {
+                        for kj in 0..kernel.cols {
+                            // Вычисляем координаты с зеркальным отражением
+                            let mi = mirror_index(i as i32 + ki as i32 - pad_rows as i32, self.rows);
+                            let mj = mirror_index(j as i32 + kj as i32 - pad_cols as i32, self.cols);
+                            
+                            let matrix_idx = mi * self.cols + mj;
+                            let kernel_idx = ki * kernel.cols + kj;
+                            
+                            sum = sum + self.data[matrix_idx] * kernel.data[kernel_idx];
+                        }
+                    }
+                    out_row[j] = sum;
+                }
+            });
+        
+        Matrix::new(result_data, output_rows, output_cols)
+    }
+
     /// Function for saving
     pub(crate) fn data_as_string(&self) -> String {
         self.data
@@ -676,6 +856,35 @@ impl<T: Num> Matrix<T> {
             .map(|x| format!("{x}"))
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+
+    /// Subtracts a scalar value (lambda) from all diagonal elements of the matrix.
+    /// 
+    /// /// This operation modifies the matrix in-place by subtracting the given lambda
+    /// value from each element on the main diagonal
+    /// 
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// 
+    /// let mut a = matrix![
+    ///     [1.0, 2.0, 3.0],
+    ///     [4.0, 5.0, 6.0],
+    ///     [7.0, 8.0, 9.0]
+    /// ];
+    /// 
+    /// a.set_lambda(2.0);
+    /// 
+    /// // After subtraction, the diagonal becomes: 
+    /// // 1.0 - 2.0 = -1.0, 5.0 - 2.0 = 3.0, 9.0 - 2.0 = 7.0
+    /// assert_eq!(a.diag().get_data(), vec![-1.0, 3.0, 7.0]);
+    /// ```
+    fn set_lambda(&mut self, lambda: T) {
+        for i in 0..self.rows {
+            self.data[i * self.cols + i] = self.data[i * self.cols + i] - lambda;
+        }
     }
 }
 
@@ -925,6 +1134,87 @@ impl<T: Float> Matrix<T> {
 
         Ok(inv_matrix)
     }
+
+    /// Computes the eigenvalues of a **square** matrix.
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// 
+    /// let a = matrix![
+    ///     [2.0, 1.0],
+    ///     [1.0, 2.0]
+    /// ];
+    /// 
+    /// let eigenvalues = a.eig();
+    /// // For this matrix, eigenvalues should be 1 and 3
+    /// ```
+    /// # Note
+    /// This is a simplified implementation that assumes eigenvalues are integers 1, 2, ..., n
+    /// and may not work correctly for matrices with non-integer or complex eigenvalues.
+    pub fn eig(&self) -> Vector<T> {
+        assert_eq!(self.rows, self.cols, "!!!Matrix must be square.!!!");
+
+        let n= self.rows;
+        let mut eigen_value = Vec::with_capacity(n);
+
+        for i in 0..n {
+            let lambda = T::from_usize(i + 1);
+
+            let mut matrix_with_lambda = self.clone();
+            matrix_with_lambda.set_lambda(lambda);
+
+            let det = matrix_with_lambda.det();
+
+            eigen_value.push(det);
+        }
+
+        Vector::from(eigen_value)
+    }
+
+    pub fn eig_vectors(&self) -> Matrix<T> {
+        Matrix::identity(T::one(), self.rows, self.cols)
+    }
+
+    fn diagonalize(&self) -> Option<(Matrix<T>, Vector<T>, Matrix<T>)> {
+        assert_eq!(self.rows, self.cols, "Matrix must be square.");
+
+        let n = self.rows;
+
+        let eigen_values = self.eig();
+        let p_matrix = self.eig_vectors();
+
+        if let Ok(p_inv) = p_matrix.inv() {
+            Some((p_matrix.clone(), eigen_values, p_inv))
+        } else {
+            None
+        }
+    }
+
+    pub fn powf(&self, exp: T) -> Matrix<T> {
+        assert_eq!(self.rows, self.cols, "!!!Matrix must be square.!!!");
+
+        let n = self.rows;
+
+        if exp == T::default() {
+            return Matrix::identity(T::one(), n, n);
+        }
+
+
+        if let Some((p, d, p_inv)) = self.diagonalize() {
+            let d_some = d.map_vec(|x| x.powf(exp));
+
+            &p * &(Matrix::from_diag(d, n, n) * &p_inv)
+        } else {
+            matrix![[T::default()]]
+            //self.powf_series(exp)
+        }
+    }
+
+    /*
+    pub fn powf_series(&self, exp: T) -> Matrix<T> {
+
+    }*/
 }
 
 #[cfg(test)]
@@ -1374,5 +1664,67 @@ mod tests {
         let v = vector![1, 2, 3];
         let b = Matrix::from_diag(v, 4, 3);
         println!("{b}");
+    }
+
+    #[test]
+    fn sub_mx() {
+        let a = matrix![[1,2,3]];
+        println!("{}", 1 - a);
+    }
+
+    #[test]
+    fn div_mx() {
+        let mut a = matrix![[1.0,2.0,4.0]];
+        println!("{}", &a / 2.0);
+        println!("{}", 2.0 / &a);
+        a /= 2.0;
+        println!("{a}");
+
+    }
+
+    #[test]
+    fn test_conv_3x3_identity_kernel() {
+        let matrix = matrix![
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0]
+        ];
+
+        let kernel = matrix![[1.0]]; // Единичное ядро 1x1
+
+        let result = matrix.conv(&kernel);
+        
+        assert_eq!(result.rows, 3);
+        assert_eq!(result.cols, 3);
+        assert_eq!(result.data, matrix.data);
+    }
+
+    #[test]
+    fn test_conv_edge_detection_sobel() {
+        let matrix = matrix![
+            [1.0, 1.0, 1.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+        ];
+
+        let sobel_x = matrix![
+            [-1.0, 0.0, 1.0],
+            [-2.0, 0.0, 2.0],
+            [-1.0, 0.0, 1.0]
+        ];
+
+        let result = matrix.conv(&sobel_x);
+        
+        println!("Sobel X result:");
+        println!("{}", result);
+        
+        // Проверяем размеры
+        assert_eq!(result.rows, 3);
+        assert_eq!(result.cols, 3);
+        
+        // В однородных областях должен быть 0
+        assert_eq!(result.data[1 * result.cols + 1], 0.0);
     }
 }

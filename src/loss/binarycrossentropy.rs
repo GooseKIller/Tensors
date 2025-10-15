@@ -20,7 +20,7 @@ impl<T: Float> Loss<T> for BCE<T> {
             return T::default();
         }
 
-        let epsilon = T::f32_f64(1e-7, 1e-15); // Small value to avoid log(0)
+        let epsilon = T::f32_f64(1e-7, 1e-15);
         let output_clamped = output.max(epsilon).min(T::one() - epsilon);
 
         let a = target & &output_clamped.ln();

@@ -8,9 +8,11 @@
 
 mod adam;
 mod sgd;
+mod rmsprop;
 
 pub use adam::*;
 pub use sgd::*;
+pub use rmsprop::*;
 
 use crate::linalg::Matrix;
 use crate::Float;

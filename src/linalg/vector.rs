@@ -76,6 +76,20 @@ impl<T: Num> Vector<T> {
         output
     }
 
+    /// Returns data of a vector
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::Vector;
+    /// 
+    /// let a = Vector::from(vec![1,2,3]);
+    /// 
+    /// assert_eq!(a.get_data(), vec![1,2,3]);
+    /// ```
+    pub fn get_data(&self) -> Vec<T> {
+        self.data.clone()
+    }
+
     /// Makes vector from start..end with step
     ///
     /// # Example
@@ -158,9 +172,9 @@ impl<T: Num> Vector<T> {
     }
 
     /// Sum of all values of vector
-    pub fn sum(self) -> T {
+    pub fn sum_all(&self) -> T {
         let mut sum = T::default();
-        for i in self.data {
+        for i in &self.data {
             sum += i.clone();
         }
         sum
@@ -209,6 +223,10 @@ impl<T: Num> Vector<T> {
         }
     }
 
+
+    /// Finding a maximum value of vector
+    /// 
+    /// returns None if there is No values in vector
     pub fn max_val(&self) -> Option<T> {
         if self.data.len() == 0 {
             return None
@@ -226,8 +244,6 @@ impl<T: Num> Vector<T> {
     ///
     /// # Example
     /// ```
-    ///
-    ///
     /// use tensorrs::linalg::{Matrix, Vector};
     /// use tensorrs::matrix;
     /// let a = Vector::from(vec![1.0, 2.0, 3.0]);
@@ -258,6 +274,56 @@ impl<T: Num> Vector<T> {
         }
     }
 
+    /// Generates a matrix by applying a binary function `f` to each pair of elements
+    ///
+    /// from `self` and `other`, structured in a Matrix.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::{Matrix, Vector};
+    /// use tensorrs::{matrix, vector};
+    ///
+    /// let a = vector![1, 2 ,3];
+    /// let b = vector![10, 20];
+    ///
+    /// assert_eq!(
+    ///     a.table(&b, |x, y| x * y),
+    ///     matrix![[10, 20],
+    ///             [20, 40],
+    ///              [30, 60]]
+    /// );
+    /// ```
+    pub fn table<F>(&self, other: &Vector<T>, f: F) -> Matrix<T>
+    where
+        F: Fn(T, T) -> T + Sync + Send{
+        let mut result_data = vec![T::default(); self.length * other.length];
+
+        result_data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, val)| {
+                let i = idx / other.length;
+                let j = idx % other.length;
+                *val = f(self.data[i], other.data[j]);
+            });
+
+        Matrix {
+            data: result_data,
+            rows: self.length,
+            cols: other.length,
+        }
+    }
+
+    /// Returns the index of the maximum element in the matrix's data array.
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::Vector;
+    /// 
+    /// let a = Vector::from(vec![5,6,7]);
+    /// 
+    /// assert_eq!(a.argmax(), 2    )
+    /// ```
     pub fn argmax(&self) -> usize {
         self.data
             .iter()
@@ -289,14 +355,44 @@ impl<T: Num> IndexMut<usize> for Vector<T> {
 }
 
 impl<T: Float> Vector<T> {
+    /// Generates a vector containing `num` evenly spaced values from `start` to `stop`.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::Vector;
+    /// let a = Vector::linspace(0.0, 10.0, 5, true);
+    /// println!("{a}");
+    /// ```
+    pub fn linspace(start: T, stop:T, num:usize, endpoint:bool) -> Self{
+        if num == 1 {
+            return Vector{
+                data: vec![start],
+                length: 1
+            };
+        }
+        let step = if endpoint {
+            (stop - start) / (T::from_usize(num) - T::one())
+        } else {
+            (stop - start) / T::from_usize(num)
+        };
+        let data = vec![T::one(); num].iter().enumerate().map(|(i, _)| {
+            start + (T::from_usize(i) * step)
+        }).collect();
+        Self {
+            data,
+            length: num,
+        }
+    }
+
     /// Finds lengths of vector
     ///
-    /// sqrt(x_1^2 + ... + x_n^2)
+    /// $sqrt(x_1^2 + ... + x_n^2)$
     /// # Example
     ///
     /// ```
     /// use tensorrs::linalg::Vector;
-    /// let a = Vector::from(vec![4.0, 3.0]);
+    /// use tensorrs::vector;
+    /// let a = vector![4.0, 3.0];
     /// println!("{}", a.length());
     /// //5
     /// ```
@@ -789,5 +885,55 @@ mod tests {
         a *= &b;
         a = a * &b;
         assert_eq!(Vector::from_num(4.0, 3), a);
+    }
+
+    #[test]
+    fn linspace_test() {
+        let a = Vector::linspace(0.0, 10.0, 11, true);
+        println!("{a}");
+    }
+
+    #[test]
+    fn table_test() {
+        let a = vector![1.0, 2.0 ,3.0];
+        let b = vector![10.0, 20.0];
+
+        let m = a.table(&b, |x, y| x * y);
+        println!("{m}");
+    }
+
+
+    #[test]
+    fn mandeltbrot_set() {
+        let y = Vector::linspace(-2.0, 1.0, 1000, true);
+        let x = y.clone();
+
+        let mandelbrot_mx = y.table(&x, |y, x| {
+            let mut zx:f64 = 0.0;
+            let mut zy:f64 = 0.0;
+
+            for _ in 0..255 {
+                let xtemp = zx * zx * zx - 3.0 * zx * zy * zy + x;
+                zy = 3.0 * zx * zx * zy - zy * zy * zy + y;
+                zx = xtemp;
+
+                // Необычное условие останова
+                if zx > 10.0 || zy > 10.0 || zx < -10.0 || zy < -10.0 {
+                    return (zx * zy).abs().min(1.0); // Для цветовой визуализации
+                }
+            }
+            1.0
+        });
+
+        for i in 0..mandelbrot_mx.rows {
+            for j in 0..mandelbrot_mx.cols {
+                if mandelbrot_mx[[i, j]] == 1.0{
+                    print!("#");
+                } else {
+                    print!(" ");
+                }
+            }
+            println!();
+        }
     }
 }

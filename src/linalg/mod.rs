@@ -13,6 +13,7 @@
 mod matrix;
 mod matrix_ops;
 mod tensor;
+mod tensor_ops;
 mod vector;
 
 pub use matrix::*;

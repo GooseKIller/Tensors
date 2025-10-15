@@ -42,6 +42,7 @@ pub mod loss;
 pub mod nn;
 pub mod optim;
 pub mod utils;
+//pub(crate) mod onnx_pb;
 
 /// Numeric type
 ///
@@ -97,6 +98,9 @@ pub trait Float: Num {
     fn neg(self) -> Self;
 
     fn to_f64(self) -> f64;
+    fn to_f32(self) -> f32;
+
+    fn to_i32(self) -> i32;
 
     fn selu_lambda(self) -> Self;
 
@@ -109,8 +113,10 @@ pub trait Float: Num {
     fn cos(self) -> Self;
     fn pi() -> Self;
     fn f32_f64(a: f32, b: f64) -> Self;
+    fn if_f32_f64<T>(a: T, b: T) -> T;
 }
 
+#[warn(dead_code)]
 macro_rules! impl_some_float_for_types {
     ($($type:ty),*) => {
         $(
@@ -132,6 +138,7 @@ macro_rules! impl_some_float_for_types {
             fn abs(self) -> Self { self.abs() }
             fn powf(self, n: $type) -> Self { self.powf(n) }
             fn neg(self) -> Self {Neg::neg(self)}
+            fn to_i32(self) -> i32 { self as i32 }
         )*
     };
 }
@@ -142,6 +149,7 @@ impl Float for f32 {
     fn to_f64(self) -> f64 {
         self as f64
     }
+    fn to_f32(self) -> f32 { self }
 
     fn selu_lambda(self) -> Self {
         1.0507f32
@@ -165,6 +173,7 @@ impl Float for f32 {
     fn f32_f64(a: f32, _: f64) -> Self {
         a
     }
+    fn if_f32_f64<T>(a: T, _: T) -> T {a}
 }
 
 impl Float for f64 {
@@ -172,6 +181,7 @@ impl Float for f64 {
     fn to_f64(self) -> f64 {
         self
     }
+    fn to_f32(self) -> f32 { self as f32 }
     fn selu_lambda(self) -> Self {
         1.050700f64
     }
@@ -193,6 +203,7 @@ impl Float for f64 {
     fn f32_f64(_: f32, b: f64) -> Self {
         b
     }
+    fn if_f32_f64<T>(_: T, b: T) -> T { b }
 }
 
 ///Structure to improve readability
@@ -224,8 +235,12 @@ impl DataType {
 mod tests {
     use crate::activation::{Function, ReLU};
     use crate::linalg::Matrix;
-    use crate::nn::Linear;
+    use crate::nn::{Linear, Sequential};
     use std::time::Instant;
+    use crate::loss::MSE;
+    use crate::matrix;
+    use crate::optim::SGD;
+    //use prost_build::*;
 
     #[test]
     fn simple_linear() {
@@ -245,5 +260,39 @@ mod tests {
         let elapsed_time = start_time.elapsed();
         println!("Time: {} micros", elapsed_time.as_micros());
         println!("{}", ans)
+    }
+
+    #[test]
+    fn some_shit() {
+        let x_mx = matrix![
+            [3.0,6.0,7.0],
+            [2.0,1.0,8.0],
+            [1.0, 1.0, 1.0],
+            [5.0, 3.0, 3.0]
+        ];
+        let y_mx = matrix![[135.0, 260.0, 220.0, 360.0]].transpose();
+
+
+        let layers: Vec<Box<dyn Function<f64>>> = vec![
+            Box::new(Linear::new(3, 1, false))
+        ];
+        let mut nn = Sequential::new(layers);
+
+        let err = MSE::new(0.0);
+        let mut optim = SGD::new(0.001);
+
+        for _ in 0..100 {
+            let v = nn.train(
+                x_mx.clone(),
+                y_mx.clone(),
+                &mut optim,
+                &err
+            );
+            if v < 0.1 {
+                break
+            }
+            println!("{v}");
+        }
+        println!("{:?}", nn[0].get_data().unwrap());
     }
 }

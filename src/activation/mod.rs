@@ -89,4 +89,15 @@ pub trait Function<T: Float>: Any {
         None
     }
     fn is_bias(&self) -> bool {false}
+
+    /*
+    fn as_linear(&self) -> Option<&Linear<T>> {
+        (&self as &dyn Any).downcast_ref::<Linear<T>>()
+    }
+
+    fn as_linear_mut(&mut self) -> Option<&mut Linear<T>> {
+        (self as &mut dyn Any).downcast_mut::<Linear<T>>()
+    }
+     */
+
 }

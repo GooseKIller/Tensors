@@ -1,9 +1,9 @@
-# Tensorrs
+# Tensorrs<img alt="LOGO" height="25" src="./assets/tensorsLogo.svg" width="25"/>
 
 **Tensorrs** is a lightweight machine learning library written in Rust.  
 It provides a simple and efficient way to build and train neural networks with minimal dependencies.
 
-## Huge Warning
+## Alpha Notice
 
 **Tensorrs is currently in alpha version.**  
 The API is unstable — function names, argument types, and behaviors may change at any time.  
@@ -93,3 +93,11 @@ See [CONTRIBUTING](assets/CONTRIBUTING.md) for more details
 ## License
 
 Tensors is licensed under the MIT License. See [LICENSE](assets/LICENSE) for more details.
+
+KOT
+```
+  |\'/-..--.
+ / _ _   ,  ;
+`~=`Y'~_<._./
+ <`-....__.'  
+```

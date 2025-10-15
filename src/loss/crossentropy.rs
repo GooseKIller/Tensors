@@ -1,4 +1,4 @@
-use crate::linalg::Matrix;
+use crate::linalg::{Matrix, Vector};
 use crate::loss::Loss;
 use crate::Float;
 
@@ -8,22 +8,42 @@ impl<T: Float> CrossEntropy<T> {
     pub fn new(_data_type: T) -> Self {
         Self(_data_type)
     }
+
+    fn vec_fun(&self, vector: Vector<T>) -> Vector<T> {
+        let max = vector.max_val().unwrap();
+        let shifted = vector.map_vec(|x| x - max);
+        let sum = shifted.map_vec(|x| x.exp()).sum_all();
+        shifted.map_vec(|x| x.exp() / sum)
+    }
+
+    fn softmax(&self, matrix: &Matrix<T>) -> Matrix<T> {
+        let mut data: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
+        for i in 0..matrix.rows {
+            let vector = self.vec_fun(matrix.get_row(i));
+            data.push(vector)
+        }
+        Matrix::from(data)
+    }
 }
 
 impl<T: Float> Loss<T> for CrossEntropy<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
-        let mut loss = T::default();
+        //let mut loss = T::default();
         let num_samples = output.rows;
-
         let epsilon = T::from_f64(1e-10);
 
+        let softmax_output = output.max(epsilon);//self.softmax(output).max(epsilon);
+
+        let mut loss = T::default();
+
+
         for i in 0..num_samples {
-            for j in 0..output.cols {
-                let predicted = if output[[i, j]] < epsilon {
+            for j in 0..softmax_output.cols {
+                let predicted = softmax_output[[i, j]];/* < epsilon {
                     epsilon
                 } else {
                     output[[i, j]]
-                };
+                };*/
                 loss -= target[[i, j]] * predicted.ln();
             }
         }
@@ -32,20 +52,9 @@ impl<T: Float> Loss<T> for CrossEntropy<T> {
     }
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
         let num_samples = output.rows;
-        /*
-        let mut grad = output.clone();
-
-        for i in 0..num_samples {
-            for j in 0..output.cols {
-                grad[[i, j]] -= target[[i, j]];
-            }
-        }
-
-
-        grad * (T::one() / T::from_usize(num_samples))
-
-         */
-        (output - &target) * (T::one() / T::from_usize(num_samples))
+        let softmax_output = self.softmax(output);
+        //(output - &target) * (T::one() / T::from_usize(num_samples))
+        (softmax_output - target) * (T::one() / T::from_usize(num_samples))
     }
 }
 

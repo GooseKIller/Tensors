@@ -33,7 +33,6 @@ use rayon::prelude::*;
 /// ```
 ///
 /// where:
-/// ```math
 /// - $ m_t $ is the first moment estimate (mean of gradients).
 /// - $ v_t $ is the second moment estimate (uncentered variance of gradients).
 /// - $ g_t $ is the gradient at time step $ t $.
@@ -41,7 +40,6 @@ use rayon::prelude::*;
 /// - $ \alpha $ is the learning rate.
 /// - $ \epsilon $ is a small constant to prevent division by zero.
 /// - $ \theta_t $ are the parameters being optimized.
-/// ```
 pub struct Adam<T: Float> {
     learning_rate: T,
     beta1: T,

@@ -39,9 +39,9 @@ impl SoftMax {
 
     fn vec_fun<T: Float>(&self, vector: Vector<T>) -> Vector<T> {
         let max = vector.max_val().unwrap();
-        let shifted = vector.map_vec(|x| x - max);
-        let sum = shifted.map_vec(|x| x.exp()).sum();
-        shifted.map_vec(|x| x.exp() / sum)
+        let exps = vector.map_vec(|x| (x - max).exp());
+        let sum: T = exps.sum_all();
+        exps.map_vec(|x| x / sum)
     }
 }
 
@@ -50,11 +50,31 @@ impl<T: Float> Function<T> for SoftMax {
         String::from("SoftMax")
     }
     fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
+        /*
         let mut data: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
         for i in 0..matrix.rows {
             let vector = self.vec_fun(matrix.get_row(i));
             data.push(vector)
         }
+        Matrix::from(data)
+         */
+        /*
+        let mut data: Vec<Vector<T>> = vec![vec![T::one()]; matrix.rows]
+            .iter()
+            .map(|x| Vector::from(vec![T::one()]))
+            .collect();
+
+        (0..matrix.rows)
+            .into_par_iter()
+            .for_each(|i| {
+            data[i] = self.vec_fun(matrix.get_row(i));
+        });
+         */
+        let data: Vec<Vector<T>> = (0..matrix.rows)
+            .into_par_iter()
+            .map(|i| self.vec_fun(matrix.get_row(i)))
+            .collect();
+
         Matrix::from(data)
     }
 
@@ -64,6 +84,8 @@ impl<T: Float> Function<T> for SoftMax {
     ///
     /// WARNING UNTESTED WELL AND DO NOT WORK NORMAL
     fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
+        /*
+        //println!("MX:{matrix}");
         let s = self.call(matrix.clone());
         let size = (matrix.rows, matrix.cols);
 
@@ -79,11 +101,10 @@ impl<T: Float> Function<T> for SoftMax {
                   //  .map(|j| diag[j] - outer[[j, j]])
                     //.collect::<Vector<_>>();
                 let mut data = vec![T::default(); size.1];
-                data
-                    .iter_mut()
+                data.iter_mut()
                     .enumerate()
                     .for_each(|(j, x)|{
-                        *x = diag[j] - outer[[i, j]];
+                        *x = diag[j] - outer[[j, j]];
                     });
                 Vector::from(
                     data
@@ -91,6 +112,16 @@ impl<T: Float> Function<T> for SoftMax {
             })
             .collect();
 
+        Matrix::from(grad_rows)
+         */
+        let s = self.call(matrix.clone());
+        let grad_rows: Vec<Vector<T>> = (0..s.rows)
+            .into_par_iter()
+            .map(|i| {
+                let row = s.get_row(i);
+                row.map_vec(|x| x * (T::one() - x))
+            })
+            .collect();
         Matrix::from(grad_rows)
     }
 }
