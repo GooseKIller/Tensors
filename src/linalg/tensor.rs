@@ -6,14 +6,11 @@ use rayon::prelude::*;
 use std::ops::{Index, IndexMut};
 use rand::distributions::{Distribution, Standard};
 use rand::random;
-
-
 struct IndexIterator {
     shape: Vec<usize>,
     current: Vec<usize>,
     done: bool,
 }
-
 impl IndexIterator {
     fn new(shape: &Vec<usize>) -> Self {
         IndexIterator {
@@ -23,17 +20,13 @@ impl IndexIterator {
         }
     }
 }
-
 impl Iterator for IndexIterator {
     type Item = Vec<usize>;
-
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
             return None;
         }
-
         let result = self.current.clone();
-
         // Increment the current index
         for i in (0..self.shape.len()).rev() {
             self.current[i] += 1;
@@ -45,16 +38,13 @@ impl Iterator for IndexIterator {
                 self.done = true;
             }
         }
-
         Some(result)
     }
 }
-
 pub fn broadcast_shape(curr_shape: &Vec<usize>, other_shape: &Vec<usize>) -> Vec<usize> {
     let mut result = Vec::new();
     let mut self_iter = curr_shape.iter().rev();
     let mut other_iter = other_shape.iter().rev();
-
     loop {
         match (self_iter.next(), other_iter.next()) {
             (Some(&a), Some(&b)) => {
@@ -79,7 +69,6 @@ pub fn broadcast_shape(curr_shape: &Vec<usize>, other_shape: &Vec<usize>) -> Vec
     result.reverse();
     result
 }
-
 #[macro_export]
 macro_rules! tensor {
     // ([$([$([$x:expr),*]),*]),*])
@@ -89,7 +78,6 @@ macro_rules! tensor {
             $($x:expr),* $(,)*
         ),* $(,)*]
     ),* $(,)*])
-
      */
     ([$($inner:tt),* $(,)?]) => {{
         Tensor::from(vec![$(
@@ -104,7 +92,6 @@ macro_rules! tensor {
     }};
     // Базовый случай: элемент-выражение
     (@inner $x:expr) => { $x };
-
     // 2D Tensor
     ($([$($x:expr),* $(,)*]),* $(,)*) => {
         Tensor::from(vec![
@@ -121,8 +108,6 @@ macro_rules! tensor {
             ]
         )
     };
-
-
     /*
     // 1D tensor
     ([$($x:expr),* $(,)?]) => {{
@@ -130,7 +115,6 @@ macro_rules! tensor {
         let len = data.len();
         Tensor::new(data, vec![len])
     }};
-
     // 2D tensor
     ([ $( [ $($x:expr),* $(,)? ] ),* $(,)? ]) => {{
         let data = vec![$( vec![$($x),*] ),*];
@@ -139,7 +123,6 @@ macro_rules! tensor {
         let flat: Vec<_> = data.into_iter().flatten().collect();
         Tensor::new(flat, vec![rows, cols])
     }};
-
     // 3D tensor
     ([ $( [ $( [ $($x:expr),* $(,)? ] ),* $(,)? ] ),* $(,)? ]) => {{
         let data = vec![
@@ -157,16 +140,14 @@ macro_rules! tensor {
     }};
      */
 }
-
-
-///A `Tensor` represents a multi-dimensional mathematical structure used for 
+///A `Tensor` represents a multi-dimensional mathematical structure used for
 /// numerical computations and machine learning operations.
-/// 
+///
 /// Reference: [nreHieW](https://github.com/nreHieW/r-nn/blob/main/src/core/tensor/mod.rs)
-/// 
+///
 /// The `Tensor` struct uses flat vector storage with shape information to represent
 /// multi-dimensional data. All mathematical operations are implemented without borrowing.
-/// 
+///
 /// # Example
 /// ```rust
 /// use tensorrs::tensor::Tensor;
@@ -182,11 +163,9 @@ pub struct Tensor<T: Num> {
     pub(crate) data: Vec<T>,
     pub(crate) shape: Vec<usize>,
 }
-
 fn product(shape: &Vec<usize>) -> usize {
     shape.iter().product()
 }
-
 impl<T: Num> Tensor<T> {
     pub fn new(data: Vec<T>, shape: Vec<usize>) -> Self {
         assert_eq!(
@@ -196,7 +175,6 @@ impl<T: Num> Tensor<T> {
         );
         Self { data, shape }
     }
-
     pub fn from_num(num: T, shape: Vec<usize>) -> Self {
         let mut mul = 1;
         for i in &shape {
@@ -205,12 +183,10 @@ impl<T: Num> Tensor<T> {
         let data = vec![num; mul];
         Self { data, shape }
     }
-
     /// Return flatten vector
     pub fn get_data(&self) -> Vec<T> {
         self.data.clone()
     }
-
     pub fn reshape(&self, shape:Vec<usize>) -> Self {
         assert_eq!(product(&shape), product(&self.shape), "!!!Reshape size mismatch!!!");
         Self {
@@ -218,7 +194,6 @@ impl<T: Num> Tensor<T> {
             shape
         }
     }
-
     /// Removes dimensions from the tensor.
     ///
     /// This function allows for the removal of dimensions from tensor.
@@ -245,7 +220,6 @@ impl<T: Num> Tensor<T> {
             }
         }
     }
-
     pub fn unsqueeze(&self, dim: usize) -> Self {
         let mut new_shape = self.shape.clone();
         new_shape.insert(dim, 1);
@@ -254,7 +228,6 @@ impl<T: Num> Tensor<T> {
             shape: new_shape,
         }
     }
-
     /// !!NOT FINISHED YET!!
     pub fn kronecker(&self, other: Tensor<T>) -> Tensor<T> {
         let new_shape: Vec<usize> = self
@@ -263,35 +236,27 @@ impl<T: Num> Tensor<T> {
             .zip(other.shape.clone())
             .map(|(&s, o)| s * o)
             .collect();
-
         let new_size = new_shape.iter().product::<usize>();
-
         let mut ans = vec![T::default(); new_size];
-
         ans.par_iter_mut().enumerate().for_each(|(index, x)| {
             let mut a_indices = vec![0; self.shape.len()];
             let mut b_indices = vec![0; other.shape.len()];
-
             let mut temp_index = index;
             for dim in (0..self.shape.len()).rev() {
                 a_indices[dim] = temp_index % self.shape[dim];
                 temp_index /= self.shape[dim];
-
                 b_indices[dim] = temp_index % other.shape[dim];
                 temp_index /= other.shape[dim];
             }
             let a_value = self[&a_indices];
             let b_value = other[&b_indices];
-
             *x = a_value * b_value;
         });
-
         Tensor {
             data: ans,
             shape: new_shape,
         }
     }
-
     pub fn cat(&self, other: &Tensor<T>, dim:usize) -> Self {
         let mut new_shape = self.shape.clone();
         new_shape[dim] = self.shape[dim] + other.shape[dim];
@@ -300,7 +265,6 @@ impl<T: Num> Tensor<T> {
                 assert_eq!(self.shape[i], other.shape[i]);
             }
         }
-
         let index_iter = IndexIterator::new(&new_shape);
         let result_data: Vec<_> = index_iter
             .collect::<Vec<_>>()
@@ -315,8 +279,6 @@ impl<T: Num> Tensor<T> {
                 }
             })
             .collect();
-
-
         Self {
             data: result_data,
             shape: new_shape,
@@ -326,11 +288,9 @@ impl<T: Num> Tensor<T> {
     fn _get_slice(&self, idxs: Vec<Range<usize>>, broadcasted_shape: Vec<usize>) -> Self {
         let mut result_shape = Vec::with_capacity(idxs.len());
         let mut result_data = Vec::new();
-
         for range in &idxs {
             result_shape.push(range.end - range.start);
         }
-
         let index_iter = IndexIterator::new(&result_shape);
         for idx in index_iter {
             let original_idx: Vec<usize> = idx
@@ -338,13 +298,11 @@ impl<T: Num> Tensor<T> {
                 .zip(idxs.iter())
                 .map(|(&i, range)| range.start + i)
                 .collect();
-
             let item = self
                 ._get_item(original_idx, broadcasted_shape.clone())
                 .clone();
             result_data.push(item);
         }
-
         Self {
             data: result_data,
             shape: result_shape,
@@ -352,30 +310,38 @@ impl<T: Num> Tensor<T> {
     }
     ®
  */
-
+    /// Performs convolution with the kernel (valid padding).
+    ///
+    /// # Panics
+    /// If kernel dimensions exceed input dimensions.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::tensor::Tensor;
+    ///
+    /// let input = Tensor::new(vec![1,2,3,4,5,6,7,8,9], vec![3,3]);
+    /// let kernel = Tensor::new(vec![1,0,0,1], vec![2,2]);
+    /// let conv = input.convolve(&kernel);
+    /// ```
     pub fn convolve(&self, kernel: &Tensor<T>) -> Tensor<T> {
         assert_eq!(
             kernel.shape, kernel.shape,
             "!!!Kernel dimensions must be less than or equal to input tensor dimensions.!!!"
         );
-
         let output_shape: Vec<usize> = self
             .shape
             .iter()
             .zip(kernel.shape.iter())
             .map(|(input, kernel)| input - kernel + 1)
             .collect();
-
         let output_size = output_shape.iter().product::<usize>();
         let mut output_data = vec![T::default(); output_size];
-
         output_data
             .par_iter_mut()
             .enumerate()
             .for_each(|(output_index, output_value)| {
                 let mut sum = T::default();
                 let output_coords = self.index_to_coords(output_index, &output_shape);
-
                 for kernel_index in 0..kernel.data.len() {
                     let kernel_coords = kernel.index_to_coords(kernel_index, &kernel.shape);
                     let input_coords: Vec<usize> = output_coords
@@ -383,20 +349,112 @@ impl<T: Num> Tensor<T> {
                         .zip(kernel_coords.iter())
                         .map(|(&o, &k)| o + k)
                         .collect();
-
                     let input_index = self.coords_to_index(&input_coords);
                     sum += self.data[input_index] * kernel.data[kernel_index];
                 }
-
                 *output_value = sum;
             });
-
         Tensor {
             data: output_data,
             shape: output_shape,
         }
     }
 
+    /// Performs convolution with zero padding (same size output).
+    ///
+    /// # Panics
+    /// If tensor dimensions don't match.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::tensor::Tensor;
+    ///
+    /// let input = Tensor::new(vec![1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0], vec![3,3]);
+    /// let kernel = Tensor::from_num(1.0/9.0, vec![3,3]);
+    /// let conv = input.conv_zero(&kernel);
+    /// ```
+    pub fn conv_zero(&self, kernel: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(self.shape.len(), kernel.shape.len(), "!!!Dimensions must match for convolution!!!");
+        let ndim = self.shape.len();
+        let pads: Vec<usize> = kernel.shape.iter().map(|&k| k / 2).collect();
+        let output_shape = self.shape.clone();
+        let output_size = product(&output_shape);
+        let mut output_data = vec![T::default(); output_size];
+        output_data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(output_index, output_value)| {
+                let output_coords = self.index_to_coords(output_index, &output_shape);
+                let mut sum = T::default();
+                for kernel_index in 0..kernel.data.len() {
+                    let kernel_coords = kernel.index_to_coords(kernel_index, &kernel.shape);
+                    let mut input_coords_i32: Vec<i32> = Vec::with_capacity(ndim);
+                    for d in 0..ndim {
+                        let ic = output_coords[d] as i32 + kernel_coords[d] as i32 - pads[d] as i32;
+                        input_coords_i32.push(ic);
+                    }
+                    let in_bounds = input_coords_i32.iter().enumerate().all(|(d, &ic)| ic >= 0 && ic < self.shape[d] as i32);
+                    if in_bounds {
+                        let input_coords: Vec<usize> = input_coords_i32.iter().map(|&ic| ic as usize).collect();
+                        let input_index = self.coords_to_index(&input_coords);
+                        sum += self.data[input_index] * kernel.data[kernel_index];
+                    }
+                }
+                *output_value = sum;
+            });
+        Tensor {
+            data: output_data,
+            shape: output_shape,
+        }
+    }
+
+    /// Performs convolution with mirror (reflect) padding.
+    ///
+    /// # Panics
+    /// If tensor dimensions don't match.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::tensor::Tensor;
+    ///
+    /// let input = Tensor::new(vec![1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0], vec![3,3]);
+    /// let kernel = Tensor::from_num(1.0/9.0, vec![3,3]);
+    /// let conv = input.conv_with_mirror_padding(&kernel);
+    /// ```
+    pub fn conv_with_mirror_padding(&self, kernel: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(self.shape.len(), kernel.shape.len(), "!!!Dimensions must match for convolution!!!");
+        let ndim = self.shape.len();
+        let pads: Vec<usize> = kernel.shape.iter().map(|&k| k / 2).collect();
+        let output_shape = self.shape.clone();
+        let output_size = product(&output_shape);
+        let mut output_data = vec![T::default(); output_size];
+        output_data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(output_index, output_value)| {
+                let output_coords = self.index_to_coords(output_index, &output_shape);
+                let mut sum = T::default();
+                for kernel_index in 0..kernel.data.len() {
+                    let kernel_coords = self.index_to_coords(kernel_index, &kernel.shape);
+                    let mut input_coords_i32: Vec<i32> = Vec::with_capacity(ndim);
+                    for d in 0..ndim {
+                        let ic = output_coords[d] as i32 + kernel_coords[d] as i32 - pads[d] as i32;
+                        input_coords_i32.push(ic);
+                    }
+                    let mut actual_input_coords: Vec<usize> = Vec::with_capacity(ndim);
+                    for d in 0..ndim {
+                        actual_input_coords.push(self.mirror_index(input_coords_i32[d], self.shape[d]));
+                    }
+                    let input_index = self.coords_to_index(&actual_input_coords);
+                    sum += self.data[input_index] * kernel.data[kernel_index];
+                }
+                *output_value = sum;
+            });
+        Tensor {
+            data: output_data,
+            shape: output_shape,
+        }
+    }
     fn index_to_coords(&self, index: usize, shape: &[usize]) -> Vec<usize> {
         let mut coords = Vec::new();
         let mut idx = index;
@@ -407,16 +465,26 @@ impl<T: Num> Tensor<T> {
         coords.reverse();
         coords
     }
-
     fn coords_to_index(&self, coords: &[usize]) -> usize {
-        coords
-            .iter()
-            .enumerate()
-            .map(|(dim, &coord)| coord * self.shape[dim])
-            .sum()
+        let mut index = 0;
+        let mut multiplier = 1;
+        for dim in (0..self.shape.len()).rev() {
+            index += coords[dim] * multiplier;
+            multiplier *= self.shape[dim];
+        }
+        index
+    }
+    fn mirror_index(&self, idx: i32, size: usize) -> usize {
+        let size_i32 = size as i32;
+        if idx < 0 {
+            ((-idx - 1) as usize) % size
+        } else if idx >= size_i32 {
+            ((2 * size_i32 - idx - 1) as usize) % size
+        } else {
+            idx as usize
+        }
     }
 }
-
 impl<T: Float> Tensor<T> {
     /// Creates a matrix with random numbers(between 0 and 1)
     /// This is achieved using the [Box-Muller transform](https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform), which generates normally distributed random numbers
@@ -436,9 +504,7 @@ impl<T: Float> Tensor<T> {
             shape,
         }
     }
-
 }
-
 impl<T: Num> Index<&[usize]> for Tensor<T> {
     type Output = T;
     fn index(&self, index: &[usize]) -> &Self::Output {
@@ -449,7 +515,6 @@ impl<T: Num> Index<&[usize]> for Tensor<T> {
             self.shape.len(),
             index.len()
         );
-
         let mut linear_index = 0;
         for i in 0..index.len() {
             assert!(
@@ -474,7 +539,6 @@ impl<T: Num> Index<&Vec<usize>> for Tensor<T> {
             self.shape.len(),
             index.len()
         );
-
         let mut linear_index = 0;
         for i in 0..index.len() {
             assert!(
@@ -488,7 +552,6 @@ impl<T: Num> Index<&Vec<usize>> for Tensor<T> {
         &self.data[linear_index]
     }
 }*/
-
 impl<T: Num> IndexMut<&[usize]> for Tensor<T> {
     fn index_mut(&mut self, index: &[usize]) -> &mut Self::Output {
         if self.shape.len() != index.len() {
@@ -538,7 +601,6 @@ impl<T: Num> IndexMut<&Vec<usize>> for Tensor<T> {
         &mut self.data[linear_index]
     }
 }*/
-
 impl<T: Num> From<Matrix<T>> for Tensor<T> {
     fn from(value: Matrix<T>) -> Self {
         let data = value.data;
@@ -546,7 +608,6 @@ impl<T: Num> From<Matrix<T>> for Tensor<T> {
         Self { data, shape }
     }
 }
-
 impl<T: Num> From<Vector<T>> for Tensor<T> {
     fn from(value: Vector<T>) -> Self {
         let data: Vec<T> = value.into();
@@ -554,19 +615,16 @@ impl<T: Num> From<Vector<T>> for Tensor<T> {
         Self { data, shape }
     }
 }
-
 impl<T:Num> From<Vec<T>> for Tensor<T> {
     fn from(value: Vec<T>) -> Self {
         let shape = vec![value.len()];
         Self {data: value, shape}
     }
 }
-
 impl<T:Num> From<Vec<Vec<T>>> for Tensor<T> {
     fn from(value: Vec<Vec<T>>) -> Self {
         let rows = value.len();
-        let cols  = value.first().map_or(0, |row| row.len());
-
+        let cols = value.first().map_or(0, |row| row.len());
         for row in value.iter().skip(1) {
             assert_eq!(row.len(), cols, "!!!All columns must be equal!!!");
         }
@@ -578,7 +636,6 @@ impl<T:Num> From<Vec<Vec<T>>> for Tensor<T> {
         Self {data, shape: vec![rows, cols]}
     }
 }
-
 impl<T: Num> From<Vec<Vec<Vec<T>>>> for Tensor<T> {
     fn from(value: Vec<Vec<Vec<T>>>) -> Self {
         let d1 = value.len();
@@ -589,7 +646,6 @@ impl<T: Num> From<Vec<Vec<Vec<T>>>> for Tensor<T> {
             .first()
             .and_then(|layer| layer.first().map(|row| row.len()))
             .expect("!!!Expected 3D Tensor but got malformed structure!!!");
-
         for (i, layer) in value.iter().enumerate() {
             assert_eq!(
                 layer.len(),
@@ -610,7 +666,6 @@ impl<T: Num> From<Vec<Vec<Vec<T>>>> for Tensor<T> {
                 );
             }
         }
-
         let flat = value.into_iter().flatten().flatten().collect();
         Tensor {
             data: flat,
@@ -618,17 +673,14 @@ impl<T: Num> From<Vec<Vec<Vec<T>>>> for Tensor<T> {
         }
     }
 }
-
 impl<T:Num> Display for Tensor<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let raw: Vec<String> = self.data.iter().map(|x| format!("{x}")).collect();
         let width = raw.iter().map(|s| s.len()).max().unwrap_or(0);
-
         let padded: Vec<String> = raw
             .into_iter()
             .map(|s| format!("{:>width$}", s, width= width))
             .collect();
-
         fn rec(
             f: &mut Formatter<'_>,
             shape: &[usize],
@@ -671,12 +723,10 @@ impl<T:Num> Display for Tensor<T> {
             }
             Ok(())
         }
-
         let mut idx = 0;
         rec(f, &self.shape, &padded, &mut idx, 0)
     }
 }
-
 impl<T: Num> Clone for Tensor<T> {
     fn clone(&self) -> Self {
         Self {
@@ -685,18 +735,16 @@ impl<T: Num> Clone for Tensor<T> {
         }
     }
 }
-
 #[cfg(test)]
 mod test {
     use crate::linalg::tensor::Tensor;
     use crate::linalg::{Matrix, Vector};
-
+    use crate::matrix;
     #[test]
     fn macro_test() {
         let a = tensor![[1,2], [1,2], [1,2], [1,2]];
         println!("{a}");
     }
-
     #[test]
     fn new_tensor() {
         let data = vec![1];
@@ -704,7 +752,6 @@ mod test {
         let _tensor = Tensor::new(data, shape.clone());
         let _tensor = Tensor::from_num(1, shape);
     }
-
     #[test]
     fn index() {
         let tr = Tensor::new(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]);
@@ -716,21 +763,18 @@ mod test {
             }
         }
     }
-
     #[test]
     fn into_matrix() {
         let tr = Tensor::new(vec![1, 2, 3, 4], vec![2, 2]);
         let mx = Matrix::from(tr);
         println!("{}", mx)
     }
-
     #[test]
     fn into_vector() {
         let tr = Tensor::new(vec![1, 2, 3, 4], vec![4]);
         let mx = Vector::from(tr);
         println!("{}", mx)
     }
-
     #[test]
     fn add() {
         let mut tr = Tensor::new(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]);
@@ -747,7 +791,6 @@ mod test {
         tr -= 1;
         assert_eq!(ans, tr);
     }
-
     #[test]
     fn mul() {
         let mut tr = Tensor::new(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]);
@@ -756,22 +799,18 @@ mod test {
         tr *= 2;
         assert_eq!(ans, tr)
     }
-
     #[test]
     fn kron() {
         let a = Tensor::new(vec![1, 2, 3, 4], vec![2, 2]);
         let b = Tensor::new(vec![0, 5, 6, 7], vec![2, 2]);
-
         println!("{:?}", a.kronecker(b));
     }
-
     #[test]
     fn cat() {
         let a = Tensor::new(vec![1,2,3,4,5,6], vec![2,3]);
         let b = Tensor::new(vec![7,8,9,10,11,12], vec![2,3]);
         println!("{}", Matrix::from(a.cat(&b, 1)))
     }
-
     #[test]
     fn conv() {
         /*
@@ -783,7 +822,6 @@ mod test {
         ];
         let input_shape = vec![4, 4];
         let input_tensor = Tensor::new(input_data, input_shape);
-
         // Создаем ядро свертки 2x2
         let kernel_data = vec![
             1, 0,
@@ -791,11 +829,24 @@ mod test {
         ];
         let kernel_shape = vec![2, 2];
         let kernel_tensor = Tensor::new(kernel_data, kernel_shape);
-
         // Применяем свертку
         let output_tensor = input_tensor.convolve(&kernel_tensor);
-
         println!("Output Tensor: {:?}", output_tensor);
         */
+    }
+    #[test]
+    fn conv_zeros() {
+        let a = tensor![[1.0,2.0,3.0],
+                [4.0,5.0,6.0],
+                [7.9, 8.0, 9.0]];
+        let krnl = Tensor::from_num(1.0/9.0, vec![3,3]);
+        println!("{}", a.conv_zero(&krnl));
+
+        let a = matrix![[1.0,2.0,3.0],
+                [4.0,5.0,6.0],
+                [7.9, 8.0, 9.0]];
+        
+        let krnl = Matrix::from_num(1.0/9.0, 3, 3);
+        println!("{}", a.conv_zero(&krnl));
     }
 }

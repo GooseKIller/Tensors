@@ -19,8 +19,8 @@ impl<T: Float> MSE<T> {
 }
 impl<T: Float> Loss<T> for MSE<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
-        if output.size() != target.size() {
-            panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.size(), target.size())
+        if output.shape() != target.shape() {
+            panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.shape(), target.shape())
         }
         let length = output.data.len();
         let difference = target - output;
@@ -37,7 +37,7 @@ impl<T: Float> Loss<T> for MSE<T> {
     ///```
     /// Where $`n`$ is length
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
-        if output.size() != target.size() {
+        if output.shape() != target.shape() {
             panic!("!!!Size of output matrix and target must be equal!!!")
         }
         let length = output.data.len();

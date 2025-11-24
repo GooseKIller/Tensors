@@ -1,5 +1,4 @@
-use crate::activation::Function;
-use crate::linalg::Matrix;
+/*use crate::activation::Function;
 use crate::nn::Sequential;
 use crate::Float;
 use crate::loss::Loss;
@@ -32,3 +31,26 @@ impl<T: Float> NeuralNetworkBuilder<T> {
         self.loss = new_loss;
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{activation::{Function, Sigmoid}, loss::MSE, nn::{Linear, neural_network_builder::NeuralNetworkBuilder}, optim::SGD};
+
+    #[test]
+    fn some() {
+        let layers: Vec<Box< dyn Function<f32>>> = vec![
+            Box::new(Linear::new(2, 2, true)),// First layer: Linear transformation
+            Box::new(Sigmoid::new()),// Activation function
+            Box::new(Linear::new(2, 1, true)),// Second layer: Linear transformation
+            Box::new(Sigmoid::new())// Activation function
+        ];
+        // Create the sequential model
+        //let mut model = Sequential::new(layers);
+        let sgd = SGD::new(0.01);
+        let mse = MSE::new(0.0);
+        let _a = NeuralNetworkBuilder::new(layers,
+         Box::new(sgd),
+          Box::new(mse));
+    }
+}*/

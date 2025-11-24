@@ -12,8 +12,8 @@ impl<T: Float> BCE<T> {
 
 impl<T: Float> Loss<T> for BCE<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
-        if output.size() != target.size() {
-            panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.size(), target.size())
+        if output.shape() != target.shape() {
+            panic!("!!!Size of output matrix and target must be equal!!!\nOutput size:{:?} Target size: {:?}", output.shape(), target.shape())
         }
         let n = output.data.len();
         if n == 0 {

@@ -314,7 +314,7 @@ impl<T: Num> Mul<&Matrix<T>> for Matrix<T> {
         }
         assert_eq!(self.cols, rhs.rows,
                    "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
-    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.size(), rhs.size());
+    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.shape(), rhs.shape());
         mtrxdot(&self, rhs)
         /*
         let mut data = vec![T::default(); self.rows * rhs.cols];
@@ -335,7 +335,7 @@ impl<T: Num> Mul<&Matrix<T>> for &Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, rhs: &Matrix<T>) -> Self::Output {
         assert_eq!(self.cols, rhs.rows, "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
-    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.size(), rhs.size());
+    Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.shape(), rhs.shape());
         mtrxdot(self, rhs)
         /*
         let mut data = vec![T::default(); self.rows * rhs.cols];

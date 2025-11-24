@@ -389,10 +389,6 @@ impl<T: Num> Matrix<T> {
         result
     }
 
-    pub fn size(&self) -> [usize; 2] {
-        [self.rows.clone(), self.cols.clone()]
-    }
-
     /// Adds column at the end of Matrix
     ///
     /// # Example
@@ -881,7 +877,7 @@ impl<T: Num> Matrix<T> {
     /// // 1.0 - 2.0 = -1.0, 5.0 - 2.0 = 3.0, 9.0 - 2.0 = 7.0
     /// assert_eq!(a.diag().get_data(), vec![-1.0, 3.0, 7.0]);
     /// ```
-    fn set_lambda(&mut self, lambda: T) {
+    pub fn set_lambda(&mut self, lambda: T) {
         for i in 0..self.rows {
             self.data[i * self.cols + i] = self.data[i * self.cols + i] - lambda;
         }
@@ -1179,7 +1175,7 @@ impl<T: Float> Matrix<T> {
     fn diagonalize(&self) -> Option<(Matrix<T>, Vector<T>, Matrix<T>)> {
         assert_eq!(self.rows, self.cols, "Matrix must be square.");
 
-        let n = self.rows;
+        let _n = self.rows;
 
         let eigen_values = self.eig();
         let p_matrix = self.eig_vectors();
@@ -1202,7 +1198,7 @@ impl<T: Float> Matrix<T> {
 
 
         if let Some((p, d, p_inv)) = self.diagonalize() {
-            let d_some = d.map_vec(|x| x.powf(exp));
+            let _d_some = d.map_vec(|x| x.powf(exp));
 
             &p * &(Matrix::from_diag(d, n, n) * &p_inv)
         } else {

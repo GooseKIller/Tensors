@@ -39,12 +39,12 @@ impl<T: Float> SSE<T> {
 
 impl<T: Float> Loss<T> for SSE<T> {
     fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
-        if output.size() != target.size() {
+        if output.shape() != target.shape() {
             panic!(
                 "!!!Size of output matrix and target must be equal!!!\
             \nOutput size:{:?} Target size: {:?}",
-                output.size(),
-                target.size()
+                output.shape(),
+                target.shape()
             )
         }
         let diff = target - output;
@@ -52,7 +52,7 @@ impl<T: Float> Loss<T> for SSE<T> {
     }
 
     fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
-        if output.size() != target.size() {
+        if output.shape() != target.shape() {
             panic!("!!!Size of output matrix and target must be equal!!!")
         }
         target - output
