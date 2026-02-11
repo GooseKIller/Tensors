@@ -1,3 +1,53 @@
+use rand::{distributions::Standard, prelude::Distribution};
+
+use crate::{Float, activation::Module, linalg::Tensor, utils::{Var, VarRef}};
+
+pub struct Linear<T: Float> {
+    pub weights: VarRef<T>,
+    pub bias: Option<VarRef<T>>,
+}
+
+impl<T:Float> Linear<T>
+where
+    Standard: Distribution<T> {
+    pub fn new(in_features: usize, out_features: usize, bias: bool) -> Self {
+        // Xavier Initialization (Glorot)
+        let limit = (T::from_usize(6) / T::from_usize(in_features + out_features)).sqrt();
+
+        let w_val = Tensor::randn(vec![in_features, out_features]) * (limit * T::from_usize(2)) - limit;
+        let weights = Var::leaf(w_val, true);
+
+        let bias = if bias {
+            let b_val = Tensor::from_num(T::default(), vec![1, out_features]);
+            Some(Var::leaf(b_val, true))
+        } else {
+            None
+        };
+
+        Self {weights, bias}
+    }
+    
+}
+
+impl<T: Float> Module<T> for Linear<T> {
+    fn forward(&self, x: &VarRef<T>) -> VarRef<T> {
+        let x_w = x * &self.weights;
+
+        match &self.bias {
+            Some(b) => &x_w + b,
+            None => x_w,
+        }
+    }
+
+    fn parameters(&self) -> Vec<VarRef<T>> {
+        let mut params = vec![self.weights.clone()];
+        if let Some(b) = &self.bias {
+            params.push(b.clone());
+        }
+        params
+    }
+}
+/*
 use crate::activation::Function;
 use crate::linalg::{Matrix, Vector};
 use crate::Float;
@@ -218,6 +268,15 @@ mod tests {
     }
 
     #[test]
+    fn call_linear_multidim() {
+        let a: Linear<f32> = Linear::new(3, 2, true);
+        let inp = matrix![[1.0, 2.0, 3.0]];
+
+        let b = a.call(inp);
+        println!("{b}");
+    }
+
+    #[test]
     fn from_matrix() {
         let matrix = matrix![[1.0], [2.0]];
         let linear = Linear::from(matrix);
@@ -226,3 +285,4 @@ mod tests {
         assert_eq!(Matrix::from_num(3.0, 1, 1), call)
     }
 }
+*/

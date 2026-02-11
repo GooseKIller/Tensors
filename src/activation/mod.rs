@@ -30,12 +30,17 @@ pub use relu::*;
 pub use selu::*;
 pub use sigmoid::*;
 pub use softmax::*;
-use std::any::Any;
 pub use tanh::*;
 
-use crate::linalg::Matrix;
 use crate::Float;
+use crate::utils::VarRef;
 
+
+pub trait Module<T: Float> {
+    fn forward(&self, x: &VarRef<T>) -> VarRef<T>;
+    fn parameters(&self) -> Vec<VarRef<T>>;
+}
+/*
 /// A trait for activation functions and other operations that can be applied to matrices.
 ///
 /// This trait is implemented by all activation functions in the Tensors library.
@@ -89,15 +94,5 @@ pub trait Function<T: Float>: Any {
         None
     }
     fn is_bias(&self) -> bool {false}
-
-    /*
-    fn as_linear(&self) -> Option<&Linear<T>> {
-        (&self as &dyn Any).downcast_ref::<Linear<T>>()
-    }
-
-    fn as_linear_mut(&mut self) -> Option<&mut Linear<T>> {
-        (self as &mut dyn Any).downcast_mut::<Linear<T>>()
-    }
-     */
-
 }
+*/

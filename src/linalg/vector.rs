@@ -4,7 +4,7 @@ use rayon::prelude::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use std::cmp::{min, Ordering};
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 /// Vector definition
 ///
@@ -197,7 +197,7 @@ impl<T: Num> Vector<T> {
         if value.shape.len() != 1 {
             return Err("Shape size must be 1");
         }
-        Ok(Vector::from(value.data))
+        Ok(Vector::from(value.packed_data()))
     }
 
     /// Parallel mapping for each element
@@ -396,9 +396,9 @@ impl<T: Float> Vector<T> {
     /// println!("{}", a.length());
     /// //5
     /// ```
-    pub fn length(self) -> T {
+    pub fn length(&self) -> T {
         let mut ans = T::default();
-        for i in self {
+        for &i in self.data.iter() {
             ans += i * i;
         }
         ans.sqrt()
@@ -656,6 +656,59 @@ macro_rules! impl_mul_for_types_vec {
 }
 impl_mul_for_types_vec!(i16, i32, i64, i128, f32, f64);
 
+impl<T: Num> Div<T> for Vector<T> {
+    type Output = Vector<T>;
+
+    fn div(self, rhs: T) -> Self::Output {
+        let mut vec = vec![T::default(); self.length];
+
+        for i in 0..self.length {
+            vec[i] = self[i] / rhs;
+        }
+        Vector::from(vec)
+    }
+}
+
+impl<T:Num> Div<T> for &Vector<T> {
+    type Output = Vector<T>;
+
+    fn div(self, rhs: T) -> Self::Output {
+        let mut vec = vec![T::default(); self.length];
+
+        for i in 0..self.length {
+            vec[i] = self[i] / rhs;
+        }
+        Vector::from(vec)
+    }   
+}
+
+impl<T:Num> DivAssign<T> for Vector<T> {
+    fn div_assign(&mut self, rhs: T) {
+        for i in 0..self.length {
+            self[i] = self[i] / rhs;
+        }
+    }
+}
+
+macro_rules! impl_div_for_types_vec {
+    ($($type:ty),*) => {
+        $(
+            impl Div<Vector<$type>> for $type {
+                type Output = Vector<$type>;
+
+                fn div(self, rhs: Vector<$type>) -> Vector<$type> {
+                    let mut vec = vec![self; rhs.length];
+                    for i in 0..rhs.length {
+                        vec[i] /= rhs[i];
+                    }
+                    Vector::from(vec)
+                }
+            }
+        )*
+    };
+}
+impl_div_for_types_vec!(i16, i32, i64, i128, f32, f64);
+
 impl<T: Num> Into<Vec<T>> for Vector<T> {
     fn into(self) -> Vec<T> {
         self.data.clone().to_vec()
@@ -673,8 +726,14 @@ impl<T: Num> From<Vec<T>> for Vector<T> {
 
 impl<T: Num> From<Matrix<T>> for Vector<T> {
     fn from(value: Matrix<T>) -> Self {
+        if value.cols == 1 {
+            return Self {
+                data: value.data,
+                length: value.rows,
+            };
+        }
         if value.rows != 1 {
-            panic!("!!!Matrix rows must be equals 1 not {}!!!", value.rows)
+            panic!("!!!Matrix rows or cols must be equals 1 not {}!!!", value.rows)
         }
         Self {
             data: value.data,
@@ -688,7 +747,7 @@ impl<T: Num> From<Tensor<T>> for Vector<T> {
         if value.shape.len() != 1 {
             panic!("Shape size must be 1")
         }
-        Vector::from(value.data)
+        Vector::from(value.packed_data())
     }
 }
 
@@ -715,6 +774,8 @@ impl<T: Num> Iterator for Vector<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::matrix;
+
     use super::*;
 
     #[test]
@@ -905,7 +966,7 @@ mod tests {
 
     #[test]
     fn mandeltbrot_set() {
-        let y = Vector::linspace(-2.0, 1.0, 1000, true);
+        let y = Vector::linspace(-3.0, 3.0, 50, true);
         let x = y.clone();
 
         let mandelbrot_mx = y.table(&x, |y, x| {
@@ -935,5 +996,13 @@ mod tests {
             }
             println!();
         }
+    }
+
+    #[test]
+    fn from_mx() {
+        let a = matrix![[1,2,3]];
+        let b = matrix![[1],[2],[3]];
+
+        assert_eq!(Vector::from(a),Vector::from(b));
     }
 }

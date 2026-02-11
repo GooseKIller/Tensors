@@ -1,4 +1,153 @@
-use rand::random;
+use rand::distributions::Standard;
+
+use crate::{Float, linalg::Tensor, nn::Linear, utils::Var};
+
+pub struct LinearBuilder<T: Float> {
+    input_size: Option<usize>,
+    output_size: Option<usize>,
+    bias: bool,
+    initializer: Initializer<T>
+}
+
+#[derive(Clone)]
+pub enum Initializer<T: Float> {
+    Xavier,
+    Zeros,
+    He,
+    LeCun,
+    Custom(fn(usize, usize, bool) -> Tensor<T>),
+    FromTensor(Tensor<T>),
+}
+
+
+impl<T: Float> LinearBuilder<T> 
+where Standard:
+     rand::distributions::Distribution<T> {
+    pub fn new() -> Self {
+        Self {
+            input_size: None,
+            output_size: None,
+            bias: true,
+            initializer: Initializer::Xavier
+        }
+    }
+
+    pub fn output_size(mut self, size: usize) -> Self {
+        self.input_size = Some(size);
+        self
+    }
+
+    pub fn input_size(mut self, size: usize) -> Self {
+        self.output_size = Some(size);
+        self
+    }
+
+    pub fn with_bias(mut self, bias: bool) -> Self {
+        self.bias = bias;
+        self
+    }
+
+    pub fn with_initializer(mut self, initializer: Initializer<T>) -> Self {
+        self.initializer = initializer;
+        self
+    }
+
+    pub fn with_tensor(mut self, tensor: Tensor<T>) -> Self {
+        self.initializer = Initializer::FromTensor(tensor);
+        self
+    }
+
+    pub fn build(self) -> Result<Linear<T>, String> {
+        let (input_size, output_size) = match self.initializer.clone() {
+            Initializer::FromTensor(tensor) => {
+                if tensor.shape.len() != 2 {
+                    return Err("Tensor must be 2D".to_string());
+                }
+                let excepted_input = tensor.shape[0];
+                let expected_output = tensor.shape[1];
+
+                if let Some(input) = self.input_size {
+                    if input != excepted_input {
+                        return Err(format!(
+                            "!!! Input size {} doesn't match matrix rows {} with bias {}!!!",
+                            input, tensor.shape[1], self.bias
+                        ));
+                    }
+                }
+
+                if let Some(output) = self.output_size {
+                    if output != expected_output {
+                        return Err(format!(
+                            "Output size {} doesn't match matrix columns {}",
+                            output, tensor.shape[0]
+                        ));
+                    }
+                }
+                (excepted_input, expected_output)
+            }
+
+            _ => {
+                let input_size = self.input_size.ok_or("!!!Input size must be specified!!!")?;
+                let output_size = self.output_size.ok_or("!!!Output size must be specified!!!")?;
+                (input_size, output_size)
+            }
+        };
+
+        let tensor = match self.initializer {
+            Initializer::Xavier => self.xavier_init(input_size, output_size),
+            Initializer::Zeros => self.zeros_init(input_size, output_size),
+            Initializer::He => self.he_init(input_size, output_size),
+            Initializer::LeCun => self.lecun_init(input_size, output_size),
+            Initializer::Custom(func) => func(input_size, output_size, self.bias),
+            Initializer::FromTensor(mx) => mx,
+        };
+
+        Ok(Linear{
+            weights: Var::leaf(tensor, true),
+            bias: if self.bias {
+                let b_val = Tensor::from_num(T::default(), vec![1, input_size]);
+                Some(Var::leaf(b_val, true))
+            } else {None},
+        })
+    }
+
+    fn lecun_init(&self, in_features: usize, out_features: usize) -> Tensor<T> {
+        let shape = vec![out_features, in_features];
+        let fan_in = T::from_usize(in_features);
+
+        let limit = (T::from_usize(3)/ fan_in).sqrt();
+        (Tensor::rand(shape) * T::from_usize(2) - T::one()) * limit
+    }
+
+    fn zeros_init(&self, in_features: usize, out_features: usize) -> Tensor<T> {
+        Tensor::from_num(T::default(), vec![out_features, in_features])
+    }
+
+    fn he_init(&self, in_features: usize, out_features: usize) -> Tensor<T> {
+        let shape = vec![out_features, in_features];
+        let fan_in = T::from_usize(in_features);
+        
+        // He Uniform limit: sqrt(6 / fan_in)
+        let limit = (T::from_usize(6) / fan_in).sqrt();
+
+        (Tensor::randn(shape) * T::from_usize(2) - T::one()) * limit
+    }
+
+    fn xavier_init(&self, in_features: usize, out_features: usize) -> Tensor<T> {
+        let shape = vec![out_features, in_features];
+        let fan_in = T::from_usize(in_features);
+        let fan_out = T::from_usize(out_features);
+        
+        // Xavier Uniform limit: sqrt(6 / (fan_in + fan_out))
+        let limit = (T::from_usize(6) / (fan_in + fan_out)).sqrt();
+
+        // (rand * 2 - 1) * limit
+        (Tensor::rand(shape) * T::from_usize(2) - T::one()) * limit
+    }
+
+
+}
+/*use rand::random;
 use crate::Float;
 use crate::nn::Linear;
 use crate::linalg::Matrix;
@@ -263,4 +412,4 @@ mod tests {
 
         println!("MX:{} Bias: {}", layer.matrix, layer.bias);
     }
-}
+}*/

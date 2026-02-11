@@ -14,7 +14,7 @@
 //! use tensorrs::activation::Function;
 //! use tensorrs::DataType;
 //! use tensorrs::linalg::{Matrix, Vector};
-//! use tensorrs::nn::{Linear, Sequential};
+//! use tensorrs::nn::{Linear, Sequentia, VecSeq};
 //! use tensorrs::optim::Adam;
 //! use tensorrs::loss::MSE;
 //! use tensorrs::loss::Loss;
@@ -22,7 +22,7 @@
 //! let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
 //! let y:Matrix<f32> = 8.0 * &x - 10.0;
 //!
-//! let layers: Vec<Box< dyn Function<f32>>> = vec![Box::new(Linear::new(1, 1, true))];
+//! let layers: VecSeq<f32> = vec![Box::new(Linear::new(1, 1, true))];
 //! let mut optim = Adam::new(0.001, &layers);
 //! let mut model = Sequential::new(layers);
 //! let loss = MSE::new(DataType::f32());
@@ -32,9 +32,12 @@
 //! }
 //! ```
 //! Thanks for using Tensors!!!
+
+#![doc(html_logo_url = "https://raw.githubusercontent.com/GooseKIller/Tensors/main/assets/tensorsLogo.svg")]
 use std::cmp::PartialOrd;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
+use std::iter::Sum;
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 
 pub mod activation;
 pub mod linalg;
@@ -57,6 +60,7 @@ pub trait Num:
     + Div
     + AddAssign
     + SubAssign
+    + MulAssign
     + Neg<Output = Self>
     + PartialOrd
     + Copy
@@ -68,6 +72,7 @@ pub trait Num:
     + Sync
     + Send
     + PartialOrd
+    + Sum
     + 'static
 {
 }
@@ -111,6 +116,8 @@ pub trait Float: Num {
 
     fn from_str(value: &str) -> Self;
     fn cos(self) -> Self;
+    fn sin(self) -> Self;
+    fn atan2(self, n:Self) -> Self;
     fn pi() -> Self;
     fn f32_f64(a: f32, b: f64) -> Self;
     fn if_f32_f64<T>(a: T, b: T) -> T;
@@ -133,6 +140,8 @@ macro_rules! impl_some_float_for_types {
             }
             fn sqrt(self) -> Self { self.sqrt() }
             fn cos(self) -> Self {self.cos()}
+            fn sin(self) -> Self {self.sin()}
+            fn atan2(self, n:Self) -> Self {self.atan2(n)}
             fn exp(self) -> Self {self.exp()}
             fn ln(self) -> Self { self.ln() }
             fn abs(self) -> Self { self.abs() }
@@ -228,71 +237,5 @@ impl DataType {
     }
     pub fn f64() -> f64 {
         0f64
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::{Function, ReLU};
-    use crate::linalg::Matrix;
-    use crate::nn::{Linear, Sequential};
-    use std::time::Instant;
-    use crate::loss::MSE;
-    use crate::matrix;
-    use crate::optim::SGD;
-    //use prost_build::*;
-
-    #[test]
-    fn simple_linear() {
-        let fc1: Linear<f64> = Linear::new(16, 64, true);
-        let fc2: Linear<f64> = Linear::new(64, 64, true);
-        let fc3: Linear<f64> = Linear::new(64, 4, true);
-        let act = ReLU::new();
-
-        let data = Matrix::new(vec![1.0; 16], 1, 16);
-
-        let start_time = Instant::now();
-        let mut ans = fc1.call(data);
-        ans = act.call(ans);
-        ans = fc2.call(ans);
-        ans = act.call(ans);
-        ans = fc3.call(ans);
-        let elapsed_time = start_time.elapsed();
-        println!("Time: {} micros", elapsed_time.as_micros());
-        println!("{}", ans)
-    }
-
-    #[test]
-    fn some_shit() {
-        let x_mx = matrix![
-            [3.0,6.0,7.0],
-            [2.0,1.0,8.0],
-            [1.0, 1.0, 1.0],
-            [5.0, 3.0, 3.0]
-        ];
-        let y_mx = matrix![[135.0, 260.0, 220.0, 360.0]].transpose();
-
-
-        let layers: Vec<Box<dyn Function<f64>>> = vec![
-            Box::new(Linear::new(3, 1, false))
-        ];
-        let mut nn = Sequential::new(layers);
-
-        let err = MSE::new(0.0);
-        let mut optim = SGD::new(0.001);
-
-        for _ in 0..100 {
-            let v = nn.train(
-                x_mx.clone(),
-                y_mx.clone(),
-                &mut optim,
-                &err
-            );
-            if v < 0.1 {
-                break
-            }
-            println!("{v}");
-        }
-        println!("{:?}", nn[0].get_data().unwrap());
     }
 }

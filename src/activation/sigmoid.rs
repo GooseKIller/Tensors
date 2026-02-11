@@ -1,6 +1,4 @@
-use crate::activation::Function;
-use crate::linalg::Matrix;
-use crate::Float;
+use crate::{Float, activation::Module, linalg::Tensor, utils::Var};
 
 /// Sigmoid activation function.
 ///
@@ -14,73 +12,32 @@ use crate::Float;
 ///
 /// # See Also
 /// - [Wikipedia: Logistic function](https://en.wikipedia.org/wiki/Logistic_function)
-
 pub struct Sigmoid;
 
 impl Sigmoid {
     pub fn new() -> Self {
         Self
     }
-
-    fn num_fun<T: Float>(&self, num: T) -> T {
-        T::one() / (T::one() + (-num).exp())
-    }
-
-    fn num_der<T: Float>(&self, num: T) -> T {
-        num.exp() / (num.exp() + T::one()).powf(T::from(2))
-    }
 }
 
-impl<T: Float> Function<T> for Sigmoid {
-    fn name(&self) -> String {
-        String::from("Sigmoid")
+impl<T: Float> Module<T> for Sigmoid {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        // Формула: 1 / (1 + exp(-x))
+        
+        let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
+        let e = Var::leaf(Tensor::scalar(e_val), false);
+
+        // 2. Считаем знаменатель: 1 + e^(-x)
+        let exp_neg_x = &e ^ &-x;
+        let denom = &exp_neg_x + T::one();
+
+        // 3. Результат: 1 / denom
+        // Используем твой div_op (оператор /)
+        let one = Var::leaf(Tensor::scalar(T::one()), false);
+        &one / &denom
     }
 
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row * cols);
-        for i in matrix.data {
-            data.push(self.num_fun(i));
-        }
-        Matrix {
-            data,
-            rows: row,
-            cols,
-        }
-    }
-    ///# Derivative of Sigmoid
-    ///```math
-    /// Sigmoid'(x) = \frac{e^x}{(e^x+1)^2}
-    /// ```
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [rows, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(rows * cols);
-        for i in matrix.data {
-            data.push(self.num_der(i));
-        }
-        Matrix { data, rows, cols }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::{Function, Sigmoid};
-    use crate::linalg::Matrix;
-    use crate::matrix;
-
-    #[test]
-    fn relu() {
-        let matrix = matrix![[0.0, -10.0]];
-        let a = Sigmoid::new();
-        let matrix = a.call(matrix);
-        println!("{}", matrix);
-    }
-
-    #[test]
-    fn derivative_relu() {
-        let matrix = matrix![[0.0, -10.0]];
-        let a = Sigmoid::new();
-        let matrix = a.derivative(matrix);
-        println!("{}", matrix);
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        vec![]
     }
 }

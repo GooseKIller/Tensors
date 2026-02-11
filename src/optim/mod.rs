@@ -14,10 +14,9 @@ pub use adam::*;
 pub use sgd::*;
 pub use rmsprop::*;
 
-use crate::linalg::Matrix;
 use crate::Float;
 
 pub trait Optimizer<T: Float> {
-    fn step(&mut self, id: usize, weights: &mut Matrix<T>, gradients: &Matrix<T>);
-    fn change_learning_rate(&mut self, new_learning_rate: T);
+    fn step(&mut self);
+    fn zero_grad(&self);    
 }

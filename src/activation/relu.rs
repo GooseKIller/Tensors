@@ -1,6 +1,4 @@
-use crate::activation::Function;
-use crate::linalg::Matrix;
-use crate::Float;
+use crate::{Float, activation::Module, utils::{AutoGrad, Var}};
 
 /// Rectified Linear Unit (ReLU) activation function.
 ///
@@ -31,68 +29,18 @@ impl ReLU {
     }
 }
 
-impl<T: Float> Function<T> for ReLU {
-    fn name(&self) -> String {
-        String::from("ReLU")
+impl<T:Float> Module<T> for ReLU {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        let x_val = x.value();
+
+        let m_pos = Var::leaf(
+            x_val.map(|v| if v > T::default() {T::one()} else {T::default()}),
+            false
+        );
+
+        x & &m_pos
     }
-
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row * cols);
-        for i in matrix.data {
-            let num = if i > T::default() { i } else { T::default() };
-            data.push(num);
-        }
-        Matrix {
-            data,
-            rows: row,
-            cols,
-        }
-    }
-
-    /// # Derivative of Relu
-    ///```math
-    ///  ReLU'(x) = \left\{
-    /// \begin{array}{ll}
-    /// 1 & \text{if } x \geq 0 \\
-    /// 0 & \text{if } x < 0
-    /// \end{array}
-    /// \right.
-    ///```
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row * cols);
-        for i in matrix.data {
-            let num = if i > T::default() { 1.into() } else { 0.into() };
-            data.push(num);
-        }
-        Matrix {
-            data,
-            rows: row,
-            cols,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::{Function, ReLU};
-    use crate::linalg::Matrix;
-    use crate::matrix;
-
-    #[test]
-    fn relu() {
-        let matrix = matrix![[10.0, -10.0]];
-        let a = ReLU::new();
-        let matrix = a.call(matrix);
-        println!("{}", matrix);
-    }
-
-    #[test]
-    fn derivative_relu() {
-        let matrix = matrix![[10.0, -10.0]];
-        let a = ReLU::new();
-        let matrix = a.derivative(matrix);
-        println!("{}", matrix);
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        vec![]
     }
 }

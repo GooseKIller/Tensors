@@ -24,7 +24,7 @@ Add `tensorrs` to your project from [crates.io](https://crates.io/crates/tensorr
 
 ```toml
 [dependencies]
-tensorrs = "0.3.2"
+tensorrs = "0.3.3"
 ```
 
 ## Example Usage
@@ -43,7 +43,7 @@ fn main() {
     let output = matrix![[0.0], [1.0], [1.0], [0.0]];
 
     // architecture of neural network
-    let layers: Vec<Box<dyn Function<f32>>> = vec![
+    let layers: VecSeq<f32> = vec![
         Box::new(Linear::new(2, 2, true)),
         Box::new(Sigmoid::new()),
         Box::new(Linear::new(2, 1, true)),

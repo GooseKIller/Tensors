@@ -8,9 +8,12 @@ mod linear;
 mod sequential;
 mod rnn;
 mod linear_builder;
-mod neural_network_builder;
+#[allow(dead_code)]
+mod conv2d;
+mod dropout;
 
 pub use linear::*;
 pub use sequential::*;
 pub use linear_builder::*;
-pub use rnn::*;
+pub use dropout::*;
+//pub use rnn::*;

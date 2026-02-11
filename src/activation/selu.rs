@@ -1,6 +1,4 @@
-use crate::activation::Function;
-use crate::linalg::Matrix;
-use crate::Float;
+use crate::{Float, activation::Module, linalg::Tensor, utils::{AutoGrad, Var}};
 
 /// Scaled Exponential Linear Unit (SELU).
 ///
@@ -35,24 +33,6 @@ impl<T: Float> SELU<T> {
         let lambda: T = T::selu_lambda(T::default());
         Self { alpha, lambda }
     }
-
-    fn selu_num(&self, x: T) -> T {
-        let one: T = 1.into();
-        if x > T::default() {
-            self.lambda * x
-        } else {
-            self.lambda * self.alpha * (x.exp() - one)
-        }
-    }
-
-    // Maybe wrong
-    fn selu_der(&self, x: T) -> T {
-        if x > T::default() {
-            self.lambda
-        } else {
-            self.lambda * self.alpha * x.exp()
-        }
-    }
 }
 
 impl<T: Float> From<(T, T)> for SELU<T> {
@@ -65,59 +45,32 @@ impl<T: Float> From<(T, T)> for SELU<T> {
     }
 }
 
-impl<T: Float> Function<T> for SELU<T> {
-    fn name(&self) -> String {
-        String::from("SELU")
+impl<T: Float> Module<T> for SELU<T> {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        let x_val = x.value();
+
+        let m_pos = Var::leaf(
+            x_val.map(|v| if v > T::default() { T::one() } else { T::default() }),
+            false
+        );
+        let m_neg = Var::leaf(
+            x_val.map(|v| if v <= T::default() { T::one() } else { T::default() }),
+            false
+        );
+
+        let pos_part = &(x * self.lambda) & &m_pos;
+
+        let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
+        let e = Var::leaf(Tensor::scalar(e_val), false);
+        let exp_x = &e ^ x;
+
+        let scale_factor = self.lambda * self.alpha;
+        let neg_part = &(&(&(&exp_x - T::one()) * scale_factor) & &m_neg);
+
+        &pos_part + neg_part
     }
 
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row * cols);
-        for i in matrix.data {
-            let num = self.selu_num(i);
-            data.push(num);
-        }
-        Matrix::new(data, row, cols)
-    }
-    ///# Derivative of SELU
-    ///```math
-    /// SELU'(x) = \left\{
-    /// \begin{array}{ll}
-    /// \lambda & \text{if } x > 0 \\
-    /// \lambda \alpha e^x & \text{if } x \leq 0
-    /// \end{array}
-    /// \right.
-    /// ```
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        let [row, cols] = [matrix.rows, matrix.cols];
-        let mut data = Vec::with_capacity(row * cols);
-        for i in matrix.data {
-            let num = self.selu_der(i);
-            data.push(num);
-        }
-        Matrix::new(data, row, cols)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::{Function, SELU};
-    use crate::linalg::Matrix;
-    use crate::{matrix, DataType};
-
-    #[test]
-    fn selu() {
-        let matrix = matrix![[0.0, 1.0]];
-        let a = SELU::new(DataType::f64());
-        let matrix = a.call(matrix);
-        println!("{}", matrix);
-    }
-
-    #[test]
-    fn derivative_selu() {
-        let matrix = matrix![[0.0, 1.0]];
-        let a = SELU::new(DataType::f64());
-        let matrix = a.derivative(matrix);
-        println!("{}", matrix);
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        vec![]
     }
 }

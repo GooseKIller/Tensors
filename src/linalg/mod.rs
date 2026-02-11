@@ -11,10 +11,7 @@
 //! 3.[Tensor] (not finished) - A multi-dimensional array for generalizing vectors and matrices to higher dimensions.
 
 mod matrix;
-mod matrix_ops;
-mod matrix_conv;
 mod tensor;
-mod tensor_ops;
 mod vector;
 
 pub use matrix::*;

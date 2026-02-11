@@ -1,6 +1,4 @@
-use crate::activation::Function;
-use crate::linalg::Matrix;
-use crate::Float;
+use crate::{Float, activation::Module, linalg::Tensor, utils::Var};
 
 /// Hyperbolic Tangent (Tanh) activation function.
 ///
@@ -14,12 +12,12 @@ use crate::Float;
 ///
 /// # Examples
 /// ```
-/// use tensorrs::activation::{Function, Tanh};
+/// use tensorrs::activation::{Module, Tanh};
 /// use tensorrs::linalg::Matrix;
 ///
 /// let tanh = Tanh::new();
 /// let input = Matrix::from(vec![vec![0.0], vec![1.0], vec![-1.0]]);
-/// let output = tanh.call(input);
+/// let output = tanh.forward(input);
 /// println!("Tanh output: {}", output);
 /// ```
 ///
@@ -35,51 +33,26 @@ impl Tanh {
     pub fn new() -> Self {
         Self
     }
-
-    fn num_fun<T: Float>(&self, num: T) -> T {
-        let e_z = num.exp();
-        let e_mz = (-num).exp();
-        (e_z - e_mz) / (e_z + e_mz)
-    }
-
-    fn num_der<T: Float>(&self, num: T) -> T {
-        let val = self.num_fun(num);
-        T::one() - val * val
-    }
 }
 
-impl<T: Float> Function<T> for Tanh {
-    fn name(&self) -> String {
-        "Tanh".to_string()
+impl<T: Float> Module<T> for Tanh {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
+        let e = Var::leaf(Tensor::scalar(e_val), false);
+
+        // e^x
+        let exp_x = &e ^ x;
+        // e^(-x)
+        let exp_neg_x = &e ^ &-x;
+
+        // (e^x - e^-x) / (e^x + e^-x)
+        let numerator = &exp_x - &exp_neg_x;
+        let denominator = &exp_x + &exp_neg_x;
+
+        &numerator / &denominator
     }
 
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        matrix.map(|x| self.num_fun(x))
-    }
-
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        matrix.map(|x| self.num_der(x))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::tanh::Tanh;
-    use crate::activation::Function;
-    use crate::linalg::Matrix;
-    use crate::matrix;
-
-    #[test]
-    fn tanh_test() {
-        let a = matrix![[1f32, 0f32, 2f32, 3f32]];
-        let tanh = Tanh::new();
-        println!("{:?} {}", a.shape(), tanh.call(a));
-    }
-
-    #[test]
-    fn tanh_der() {
-        let a = matrix![[1f32, 0f32, 2f32, 3f32]];
-        let tanh = Tanh::new();
-        println!("{:?} {}", a.shape(), tanh.derivative(a));
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        vec![]
     }
 }

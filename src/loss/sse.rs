@@ -1,6 +1,5 @@
-use crate::linalg::Matrix;
-use crate::loss::Loss;
 use crate::Float;
+use crate::utils::VarRef;
 
 /// Sum of Squared Errors (SSE) loss function.
 ///
@@ -21,40 +20,7 @@ use crate::Float;
 ///
 /// # See Also
 /// - [Wikipedia: Mean squared error](https://en.wikipedia.org/wiki/Mean_squared_error)
-pub struct SSE<T: Float>(T);
-
-impl<T: Float> SSE<T> {
-    /// Creates a new `SSE` loss function.
-    ///
-    /// # Arguments
-    /// * `datatype_number` - A placeholder value of type `T`. This is not used in the computation
-    ///   but ensures type consistency with other loss functions.
-    ///
-    /// # Returns
-    /// A new instance of the `SSE` loss function.
-    pub fn new(datatype_number: T) -> Self {
-        Self(datatype_number)
-    }
-}
-
-impl<T: Float> Loss<T> for SSE<T> {
-    fn call(&self, output: &Matrix<T>, target: &Matrix<T>) -> T {
-        if output.shape() != target.shape() {
-            panic!(
-                "!!!Size of output matrix and target must be equal!!!\
-            \nOutput size:{:?} Target size: {:?}",
-                output.shape(),
-                target.shape()
-            )
-        }
-        let diff = target - output;
-        diff.map(|x| x.powf(T::from(2))).sum()
-    }
-
-    fn gradient(&self, output: &Matrix<T>, target: &Matrix<T>) -> Matrix<T> {
-        if output.shape() != target.shape() {
-            panic!("!!!Size of output matrix and target must be equal!!!")
-        }
-        target - output
-    }
+pub fn sse<T:Float>(y: &VarRef<T>, y_pred: &VarRef<T>) -> VarRef<T> {
+    let diff = y - y_pred;
+    (&(&diff ^ T::from_usize(2)) ^ T::from_f64(0.5)).sum()
 }

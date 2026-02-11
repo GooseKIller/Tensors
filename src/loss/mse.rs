@@ -1,4 +1,11 @@
-use crate::linalg::Matrix;
+use crate::{Float, utils::VarRef};
+
+pub fn mse<T:Float>(y: &VarRef<T>, y_pred: &VarRef<T>) -> VarRef<T> {
+    let diff = y - y_pred;
+    &(&diff ^ T::from_usize(2)).sum() / T::from_usize(y_pred.0.borrow().value.shape[0])
+}
+
+/*use crate::linalg::Matrix;
 use crate::loss::Loss;
 use crate::Float;
 use rayon::prelude::*;
@@ -143,3 +150,4 @@ mod tests {
         assert_eq!(1, 1)
     }
 }
+*/

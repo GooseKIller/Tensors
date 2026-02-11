@@ -1,104 +1,53 @@
-use crate::activation::Function;
-use crate::Float;
-use crate::linalg::Matrix;
-use crate::optim::Optimizer;
-use rayon::prelude::IntoParallelRefMutIterator;
-use rayon::prelude::*;
+use crate::{Float, linalg::Tensor, optim::Optimizer, utils::{AutoGrad, VarRef}};
 
-pub struct  RMSprop<T:Float> {
-    learning_rate: T,
-    decay: T,
-    epsilon: T,
-    cache: Vec<Matrix<T>>,
+pub struct RMSprop<T: Float> {
+    params: Vec<VarRef<T>>,
+    lr: T,
+    v: Vec<Tensor<T>>, // Скользящее среднее квадратов градиентов
+    alpha: T,          // Коэффициент сглаживания (обычно 0.99)
+    eps: T,            // Малое число для стабильности
 }
 
-impl<T:Float> RMSprop<T> {
-    pub fn new(learning_rate: T, architecture: &Vec<Box<dyn Function<T>>>) -> Self {
-        let decay = T::from_f64(0.9);
-        let epsilon = T::from_f64(1e-8);
-        let mut cache = vec![];
-
-        for layer in architecture {
-            if layer.is_linear() {
-                let shape = layer.get_data().unwrap().shape();
-                cache.push(Matrix::zeros(shape))
-            }
+impl<T: Float> RMSprop<T> {
+    pub fn new(params: Vec<VarRef<T>>, lr: T) -> Self {
+        let mut v = Vec::new();
+        for p in &params {
+            let shape = p.borrow().value.shape.clone();
+            v.push(Tensor::from_num(T::default(), shape));
         }
 
         Self {
-            learning_rate,
-            decay,
-            epsilon,
-            cache,
+            params,
+            lr,
+            v,
+            alpha: T::from_f64(0.99),
+            eps: T::from_f64(1e-8),
         }
     }
 }
 
 impl<T: Float> Optimizer<T> for RMSprop<T> {
-    fn step(&mut self, id: usize, weights: &mut Matrix<T>, gradients: &Matrix<T>) {
-        let decay = self.decay;
-        let epsilon = self.epsilon;
-        let lr = self.learning_rate;
+    fn step(&mut self) {
+        for (i, param) in self.params.iter().enumerate() {
+            let mut p = param.borrow_mut();
+            let grad = p.grad.borrow().shallow_copy();
 
-        self.cache[id]
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, v)| {
-                let grad = gradients.data[i];
-                *v = decay * *v + (T::one() - decay) * grad * grad;
-            });
+            // 1. Обновляем v: v = alpha * v + (1 - alpha) * grad^2
+            let grad_sq = &grad & &grad;
+            self.v[i] = &(&self.v[i] * self.alpha) + &(&grad_sq * (T::one() - self.alpha));
 
-        weights
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, w)| {
-                *w -= lr * gradients.data[i] / (self.cache[id].data[i].sqrt() + epsilon);
-            });
+            // 2. Считаем обновление: lr * grad / (sqrt(v) + eps)
+            let v_sqrt = self.v[i].map(|x| x.sqrt() + self.eps);
+            let update = &(&grad * self.lr) / &v_sqrt;
 
-    }
-    fn change_learning_rate(&mut self, new_learning_rate: T) {
-        self.learning_rate = new_learning_rate;
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use crate::activation::{Function, Sigmoid};
-    use crate::loss::SSE;
-    use crate::{DataType, matrix};
-    use crate::linalg::Matrix;
-    use crate::nn::{Linear, Sequential};
-    use crate::optim::RMSprop;
-
-    #[test]
-    fn learn_with_rmsprop() {
-        let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
-        let output = matrix![[0.0], [1.0], [1.0], [0.0]];
-
-        let layers: Vec<Box<dyn Function<f32>>> = vec![
-            Box::new(Linear::new(2, 2, true)),
-            Box::new(Sigmoid::new()),
-            Box::new(Linear::new(2, 1, true)),
-            Box::new(Sigmoid::new()),
-        ];
-        let mut optim = RMSprop ::new(0.002f32, &layers);
-        let mut model = Sequential::new(layers);
-        let loss = SSE::new(DataType::f32());
-        let mut loss_num = 100f32;
-        println!("{}", model.forward(input.clone()));
-        for i in 0..10000 {
-            if loss_num < 0.001 {
-                println!("i:{i} LOSS:{loss_num}");
-                break;
-            }
-            loss_num = model.train(input.clone(), output.clone(), &mut optim, &loss);
-            if i % 1000 == 0 {
-                println!("{loss_num}");
-            }
+            // 3. Обновляем веса
+            p.value = &p.value - &update;
         }
-        println!("{}", model.forward(input));
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
     }
 }

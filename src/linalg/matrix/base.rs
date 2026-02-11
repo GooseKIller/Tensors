@@ -1,12 +1,12 @@
-use crate::linalg::{Tensor, Vector};
-use crate::{Float, Num};
-use rand::distributions::{Distribution, Standard};
 use rand::random;
-use rayon::prelude::IntoParallelRefMutIterator;
-use rayon::prelude::*;
 use std::cmp::min;
-use std::fmt::{Display, Formatter};
+use rayon::prelude::*;
+use crate::{Float, Num};
 use std::ops::{Index, IndexMut};
+use std::fmt::{Display, Formatter};
+use crate::linalg::{Tensor, Vector};
+use rayon::prelude::IntoParallelRefMutIterator;
+use rand::distributions::{Distribution, Standard};
 
 /// Matrix definition
 ///
@@ -77,6 +77,8 @@ pub struct Matrix<T: Num> {
 
 impl<T: Num> Matrix<T> {
     /// Create matrix from vector and usize, usize
+    /// 
+    /// can panic if length of vector does not equal rows * cols
     /// # Example
     /// ```
     /// use tensorrs::linalg::Matrix;
@@ -176,11 +178,12 @@ impl<T: Num> Matrix<T> {
         if value.shape.len() != 2 {
             return Err("Shape size must be 2");
         }
-        Ok(Matrix::new(value.data, value.shape[0], value.shape[1]))
+        Ok(Matrix::new(value.packed_data(), value.shape[0], value.shape[1]))
     }
 
     /// Creating Matrix with diagonal values of vector
     /// 
+    /// Can panic if length of vector not equal to min(rows, cols)
     /// # Example
     /// ```
     /// use tensorrs::linalg::{Matrix, Vector};
@@ -216,7 +219,7 @@ impl<T: Num> Matrix<T> {
 
     /// Creates a identity matrix
     ///
-    /// need to implement type
+    /// need to explicit write a data type
     ///
     /// # Example
     /// ```
@@ -292,7 +295,8 @@ impl<T: Num> Matrix<T> {
     }
 
     /// Returns column as Vector with index (index starts with 0)
-    ///
+    /// 
+    /// Can panic if index get out of bounds
     /// # Example
     /// ```
     /// use tensorrs::linalg::{Matrix, Vector};
@@ -317,7 +321,8 @@ impl<T: Num> Matrix<T> {
     }
 
     /// Removes column from matrix
-    ///
+    /// 
+    /// Can panic if index get out of bounds
     /// # Example
     /// ```
     /// use tensorrs::matrix;
@@ -345,6 +350,7 @@ impl<T: Num> Matrix<T> {
 
     /// Returns row as Vector with index (index starts with 0)
     ///
+    /// Can panic if index get out of bounds
     /// # Example
     /// ```
     /// use tensorrs::linalg::{Matrix, Vector};
@@ -391,6 +397,7 @@ impl<T: Num> Matrix<T> {
 
     /// Adds column at the end of Matrix
     ///
+    /// Can panic if index get out of bounds
     /// # Example
     ///
     /// ```
@@ -407,7 +414,7 @@ impl<T: Num> Matrix<T> {
         assert_eq!(
             column.len(),
             self.rows,
-            "!!!the length of the Vec<T> is not equal to the size of the rows of the matrix!!!"
+            "!!!The length of the Vec<T> is not equal to the size of the rows of the matrix!!!"
         );
         for i in 0..self.rows {
             self.data.insert((i + 1) * self.cols + i, column[i].clone());
@@ -415,8 +422,22 @@ impl<T: Num> Matrix<T> {
         self.cols += 1;
     }
 
+    pub fn set_col(&mut self, col: usize, v: &Vector<T>) {
+        assert!(col < self.cols, "Column index out of bounds");
+        assert_eq!(
+            v.len(),
+            self.rows,
+            "Vector length must match number of rows"
+        );
+
+        for i in 0..self.rows {
+            self[[i, col]] = v[i];
+        }
+    }
+
     /// Adds row at the end of Matrix
     ///
+    /// Can panic if index get out of bounds
     /// # Example
     ///
     /// ```
@@ -484,7 +505,7 @@ impl<T: Num> Matrix<T> {
     }
 
     /// Comparison of two matrices
-    ///
+    /// 
     /// panics if their shapes are different
     /// # Example
     /// ```
@@ -511,14 +532,6 @@ impl<T: Num> Matrix<T> {
                 *x = T::from(1).neg();
             }
         });
-        /*
-        for i in 0..self.data.len() {
-            if self.data[i] > other.data[i] {
-                comparisons[i] = T::from(1);
-            } else if self.data[i] < other.data[i] {
-                comparisons[i] = T::from(1).neg();
-            }
-        }*/
         Matrix::new(comparisons, self.rows, self.cols)
     }
 
@@ -552,6 +565,7 @@ impl<T: Num> Matrix<T> {
 
     /// Hadamard product or element-wise product
     ///
+    /// panics if their shapes are different
     /// # Example
     ///```
     /// use tensorrs::linalg::Matrix;
@@ -730,6 +744,31 @@ impl<T: Num> Matrix<T> {
         Vector::from(data)
     }
 
+    /// Performs a valid convolution (without padding) of the matrix with the given kernel.
+    /// 
+    /// Panics if the kernel is larger than the matrix in either dimension.
+    /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    ///
+    /// let input = matrix![
+    ///     [1, 2, 3, 4],
+    ///     [5, 6, 7, 8],
+    ///     [9, 10, 11, 12],
+    ///     [13, 14, 15, 16]
+    /// ];
+    ///
+    /// let kernel = matrix![
+    ///     [1, 0, -1],
+    ///     [1, 0, -1],
+    ///     [1, 0, -1]
+    /// ];
+    ///
+    /// let result = input.conv(&kernel);
+    /// // Result: [[-6, -6],
+    /// // [-6, -6]]
+    /// ```
     pub fn conv(&self, kernel: &Matrix<T>) -> Matrix<T> {
         assert!(
             kernel.rows <= self.rows && kernel.cols <= self.cols,
@@ -764,6 +803,30 @@ impl<T: Num> Matrix<T> {
         Matrix::new(result_data, output_rows, output_cols)
     }
 
+    /// Performs a convolution with zero padding, preserving the input dimensions.
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    ///
+    /// let input = matrix![
+    ///     [1, 2, 3],
+    ///     [4, 5, 6],
+    ///     [7, 8, 9]
+    /// ];
+    ///
+    /// let kernel = matrix![
+    ///     [0, 1, 0],
+    ///     [1, 2, 1],
+    ///     [0, 1, 0]
+    /// ];
+    ///
+    /// let result = input.conv_zero(&kernel);
+    /// // Result: [[ 8, 14,  3],
+    /// // [21, 30, 29],
+    /// // [26, 37, 32]]
+    /// ```
     pub fn conv_zero(&self, kernel: &Matrix<T>) -> Matrix<T> {
         let pad_rows = kernel.rows / 2;
         let pad_cols = kernel.cols / 2;
@@ -800,6 +863,32 @@ impl<T: Num> Matrix<T> {
 
     }
 
+    /// Performs a convolution with mirror padding, preserving the input dimensions.
+    /// 
+    /// # Example
+    /// /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    ///
+    /// let input = matrix![
+    ///     [1, 2, 3],
+    ///     [4, 5, 6],
+    ///     [7, 8, 9]
+    /// ];
+    ///
+    /// let gaussian = matrix![
+    ///     [1, 2, 1],
+    ///     [2, 4, 2],
+    ///     [1, 2, 1]
+    /// ];
+    ///
+    /// // Output will be 3x3 with mirror padding at edges
+    /// let blurred = input.conv_with_mirror_padding(&gaussian);
+    /// // Result: [[48,  56,  64],
+    /// // [72,  80,  88],
+    /// // [96, 104, 112]]
+    /// ```
     pub fn conv_with_mirror_padding(&self, kernel: &Matrix<T>) -> Matrix<T> {
         fn mirror_index(idx: i32, size: usize) -> usize {
             let size_i32 = size as i32;
@@ -845,15 +934,6 @@ impl<T: Num> Matrix<T> {
         Matrix::new(result_data, output_rows, output_cols)
     }
 
-    /// Function for saving
-    pub(crate) fn data_as_string(&self) -> String {
-        self.data
-            .iter()
-            .map(|x| format!("{x}"))
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
 
     /// Subtracts a scalar value (lambda) from all diagonal elements of the matrix.
     /// 
@@ -881,6 +961,57 @@ impl<T: Num> Matrix<T> {
         for i in 0..self.rows {
             self.data[i * self.cols + i] = self.data[i * self.cols + i] - lambda;
         }
+    }
+
+    pub fn hstack(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.rows, other.rows, "!!!Rows must be same mx1: {}, mx2:{}!!!",
+            self.rows, other.rows);
+        let mut new_data = vec![T::default(); self.rows * (self.cols + other.cols)];
+
+        new_data.par_chunks_mut(self.cols + other.cols)
+        .enumerate()
+        .for_each(|(row_idx, row_slice)| {
+            for col in 0..self.cols {
+                row_slice[col] = self[[row_idx, col]];
+            }
+
+            for col in 0..self.cols {
+                row_slice[self.cols + col] = self[[row_idx, col]];
+            }
+        });
+
+        Matrix::new(new_data, self.rows, self.cols + other.cols)
+    }
+
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.data.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut()
+    }
+
+    pub fn indexed_iter(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
+        (0..self.rows).flat_map( move |r| {
+            (0..self.cols).map(move |c| ((r, c), &self.data[(self.cols * r) + c]))
+        })
+    }  
+
+    pub fn rows_iter(&self) -> impl Iterator<Item = &[T]> {
+        self.data.chunks(self.cols)
+    }
+    
+    // Итератор по строкам с мутабельностью
+    pub fn rows_iter_mut(&mut self) -> impl Iterator<Item = &mut [T]> {
+        self.data.chunks_mut(self.cols)
+    }
+
+    pub fn filter<P>(&self, predicate: P) -> impl Iterator<Item = &T> 
+    where
+        P: FnMut(&&T) -> bool,
+    {
+        self.iter().filter(predicate)
     }
 }
 
@@ -913,6 +1044,24 @@ impl<T: Num> IndexMut<[usize; 2]> for Matrix<T> {
         );
 
         &mut self.data[(self.cols * i) + j]
+    }
+}
+
+impl<'a, T: Num> IntoIterator for &'a Matrix<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.iter()
+    }
+}
+
+impl<'a, T: Num> IntoIterator for &'a mut Matrix<T> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+    
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.iter_mut()
     }
 }
 
@@ -958,9 +1107,9 @@ impl<T: Num> From<Vector<T>> for Matrix<T> {
 
 impl<T: Num> From<Tensor<T>> for Matrix<T> {
     fn from(value: Tensor<T>) -> Self {
-        assert_eq!(value.shape.len(), 2, "Shape size must be 2");
+        assert_eq!(value.shape.len(), 2, "!!!Shape size must be 2!!!");
         Self {
-            data: value.data,
+            data: value.packed_data(),
             rows: value.shape[0],
             cols: value.shape[1],
         }
@@ -1024,10 +1173,24 @@ impl<T: Float> Matrix<T> {
         }
     }
 
+    pub fn rand(rows: usize, cols: usize) -> Self
+    where 
+        Standard: Distribution<T>,
+    {
+        Self { data: vec![T::default(); rows * cols]
+                .iter()
+                .map(|_| {
+                    random::<T>()
+                })
+                .collect(),
+             rows, cols }
+    }
+
     /// Natural logarithm for all elements
     pub fn ln(&self) -> Self {
         self.map(|x| x.ln())
     }
+
     /// Finds the norm of Matrix in any power
     pub fn norm(&self, p: T) -> T {
         assert!(p >= T::one(), "!!!Number p:{} must be positive!!!", p);
@@ -1131,6 +1294,30 @@ impl<T: Float> Matrix<T> {
         Ok(inv_matrix)
     }
 
+    pub fn qr(&self) -> (Matrix<T>, Matrix<T>) {
+        let n = self.rows;
+        let mut q = Matrix::from_num(T::default(), n, n);
+        let mut r = q.clone();
+
+        let mut v: Vec<Vector<T>> = (0..n)
+            .map(|j| self.get_col(j))
+            .collect();
+
+        for i in 0..n {
+            for j in 0..i {
+                let rij = q.get_col(j).scalar(&v[i]);
+                r[[j, i]] = rij;
+                v[i] -= &(q.get_col(j) * rij);
+            }
+
+            let norm = v[i].length();
+            r[[i, i]] = norm;
+
+            q.set_col(i, &(&v[i] / norm));
+        }
+        (q, r)
+    }
+
     /// Computes the eigenvalues of a **square** matrix.
     /// # Examples
     /// ```
@@ -1145,31 +1332,207 @@ impl<T: Float> Matrix<T> {
     /// let eigenvalues = a.eig();
     /// // For this matrix, eigenvalues should be 1 and 3
     /// ```
-    /// # Note
-    /// This is a simplified implementation that assumes eigenvalues are integers 1, 2, ..., n
-    /// and may not work correctly for matrices with non-integer or complex eigenvalues.
     pub fn eig(&self) -> Vector<T> {
-        assert_eq!(self.rows, self.cols, "!!!Matrix must be square.!!!");
+        assert_eq!(self.rows, self.cols, "!!!Matrix must be square!!!");
 
-        let n= self.rows;
-        let mut eigen_value = Vec::with_capacity(n);
+        let n = self.rows;
+        let mut a = self.clone();
 
-        for i in 0..n {
-            let lambda = T::from_usize(i + 1);
+        let max_iter = 1000;
+        let eps = T::from_f64(1e-10);
 
-            let mut matrix_with_lambda = self.clone();
-            matrix_with_lambda.set_lambda(lambda);
+        for _ in 0..max_iter {
+            let (q, r) = a.qr();
+            a = r * &q;
 
-            let det = matrix_with_lambda.det();
+            // проверка сходимости
+            let mut off_diag_norm = T::default();
+            for i in 0..n {
+                for j in 0..i {
+                    off_diag_norm = off_diag_norm + a[[i, j]].abs();
+                }
+            }
 
-            eigen_value.push(det);
+            if off_diag_norm < eps {
+                break;
+            }
         }
 
-        Vector::from(eigen_value)
+        let mut eigenvalues = Vec::with_capacity(n);
+        for i in 0..n {
+            eigenvalues.push(a[[i, i]]);
+        }
+
+        Vector::from(eigenvalues)
     }
 
-    pub fn eig_vectors(&self) -> Matrix<T> {
-        Matrix::identity(T::one(), self.rows, self.cols)
+
+    /// Finds orthonormal eigen vectors
+    /// 
+    /// Will return matrix where each row is eigenvector
+    ///
+    /// Can panic if matrix is not square
+    /// 
+    /// # Example
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// 
+    /// let a = matrix![
+    ///     [1.0, 0.0, 0.0],
+    ///     [0.0, 2.0, 1.0],
+    ///     [0.0, 1.0, 2.0]];
+    /// 
+    /// prinln!("{}", a.eig_vector());
+    /// // [{1 0 0},                     ≈ v₂ = [1, 0, 0]
+    /// // {0 0.707106781, -0.707106781}, ≈ v₃ = [0, 1/√2, -1/√2]
+    /// //{0 0.707106781, 0.707106781,}]  ≈ v₁ = [0, 1/√2, 1/√2]
+    /// ```
+    pub fn eig_vectors(&self) -> Matrix<T>{
+        assert_eq!(self.rows, self.cols, "!!!Matrix must be square!!!");
+
+        let n = self.rows;
+        let mut a = self.clone();
+        let mut v = Matrix::identity(T::one(), n, n);
+
+        let max_iter = 1000;
+        let eps = T::from_f64(1e-10);
+
+        for _ in 0..max_iter {
+            let (q, r) = a.qr();
+            a = r * &q;
+            v = v * &q;
+
+            let mut off_diag = T::default();
+            for i in 0..n {
+                for j in 0..i {
+                    off_diag = off_diag + a[[i, j]].abs();
+                }
+            }
+
+            if off_diag < eps {
+                break;
+            }
+        }
+
+        v
+    }
+
+    pub fn schur(&self, iters: usize) -> (Matrix<T>, Matrix<T>) {
+        assert_eq!(self.rows, self.cols, "Matrix must be square.");
+
+        let n = self.rows;
+
+        let mut a = self.clone();
+        let mut q_total = Matrix::identity(T::one(), n, n);
+
+        for _ in 0..iters {
+            let (q, r) = a.qr();
+
+            // A_{k+1} = R Q
+            a = &r * &q;
+
+            q_total = &q_total * &q;
+        }
+
+        (q_total, a)
+    }
+
+    fn powf_schur_blocks(&self, exp: T) -> Matrix<T> {
+        assert_eq!(self.rows, self.cols);
+
+        let n = self.rows;
+        let mut result = Matrix::from_num(T::default(), n, n);
+
+        let mut i = 0;
+        while i < n {
+            // Проверяем 2x2 блок (в форме Шура это блок с комплексными собственными значениями)
+            if i + 1 < n && self[[i + 1, i]].abs() > T::from_f64(1e-10) {
+                // Блок 2x2 в форме Шура
+                let a = self[[i, i]];
+                let b = self[[i, i + 1]];
+                let c = self[[i + 1, i]];
+                let d = self[[i + 1, i + 1]];
+
+                // В форме Шура блок 2x2 имеет вид [a, b; c, d] с c ≠ 0
+                // и соответствует паре комплексно-сопряженных собственных значений
+                
+                // Собственные значения: λ = α ± iβ, где α = (a+d)/2, β = √(-bc)
+                let alpha = (a + d) / T::from_usize(2);
+                let beta = (-b * c).sqrt();
+                
+                // Модуль и аргумент комплексного числа
+                let r = (alpha * alpha + beta * beta).sqrt();
+                let theta = beta.atan2(alpha);
+                
+                let r_pow = r.powf(exp);
+                let new_theta = theta * exp;
+                
+                let new_alpha = r_pow * new_theta.cos();
+                let new_beta = r_pow * new_theta.sin();
+                
+                result[[i, i]] = new_alpha;
+                result[[i, i + 1]] = -new_beta;
+                result[[i + 1, i]] = new_beta;
+                result[[i + 1, i + 1]] = new_alpha;
+
+                i += 2;
+            } else {
+                result[[i, i]] = self[[i, i]].powf(exp);
+                i += 1;
+            }
+        }
+
+        result
+    }
+
+    pub fn schur_with_convergence(&self, max_iters: usize, eps: T) -> (Matrix<T>, Matrix<T>) {
+        assert_eq!(self.rows, self.cols, "Matrix must be square.");
+
+        let n = self.rows;
+        let mut a = self.clone();
+        let mut q = Matrix::identity(T::one(), n, n);
+
+        for _ in 0..max_iters {
+            // Вычисляем сдвиг (используем последний диагональный элемент)
+            let mu = a[[n - 1, n - 1]];
+            
+            // QR разложение со сдвигом: A - μI = QR
+            let mut a_shifted = a.clone();
+            for i in 0..n {
+                a_shifted[[i, i]] = a_shifted[[i, i]] - mu;
+            }
+            
+            let (q_k, r) = a_shifted.qr();
+            
+            // A_{k+1} = RQ + μI
+            a = &r * &q_k;
+            for i in 0..n {
+                a[[i, i]] = a[[i, i]] + mu;
+            }
+            
+            // Накопление преобразований
+            q = &q * &q_k;
+
+            // Проверка сходимости (внедиагональные элементы малы)
+            let mut converged = true;
+            for i in 0..n {
+                for j in 0..i {
+                    if a[[i, j]].abs() > eps {
+                        converged = false;
+                        break;
+                    }
+                }
+                if !converged { break; }
+            }
+            
+            if converged {
+                // println!("Schur converged after {} iterations", iter);
+                break;
+            }
+        }
+
+        (q, a)
     }
 
     fn diagonalize(&self) -> Option<(Matrix<T>, Vector<T>, Matrix<T>)> {
@@ -1195,29 +1558,345 @@ impl<T: Float> Matrix<T> {
         if exp == T::default() {
             return Matrix::identity(T::one(), n, n);
         }
+        if exp == T::one() {
+            return self.clone();
+        }
 
 
         if let Some((p, d, p_inv)) = self.diagonalize() {
-            let _d_some = d.map_vec(|x| x.powf(exp));
-
-            &p * &(Matrix::from_diag(d, n, n) * &p_inv)
+            let d_pow = Matrix::from_diag(d.map_vec(|x| x.powf(exp)), n, n);
+            &p * &(&d_pow * &p_inv)
         } else {
-            matrix![[T::default()]]
-            //self.powf_series(exp)
+            let (q, t) = self.schur_with_convergence(200, T::from_f64(1e-10));
+            let t_pow = t.powf_schur_blocks(exp);
+            &q * &t_pow * &q.transpose()
         }
     }
 
-    /*
-    pub fn powf_series(&self, exp: T) -> Matrix<T> {
+    /// Computes the mean and variance of all matrix elements in a single pass.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    ///
+    /// let m = matrix![
+    ///     [1.0f32, 2.0, 3.0],
+    ///     [4.0, 5.0, 6.0]
+    /// ];
+    ///
+    /// let (mean, variance) = m.mean_var();
+    /// assert_eq!(mean, 3.5);
+    /// assert!((variance - 2.916666).abs() < 1e-6);
+    /// ```
+    pub fn mean_var(&self) -> (T, T) {
+        let rows = self.rows;
+        let cols = self.cols;
 
-    }*/
+        let (sum, sum_eq) = self.data
+            .par_chunks(cols)
+            .map(|chunk| {
+                let mut chunk_sum = T::default();
+                let mut chunk_sum_eq = T::default();
+
+                for &value in chunk {
+                    chunk_sum += value;
+                    chunk_sum_eq += value * value;
+                }
+
+                (chunk_sum, chunk_sum_eq)
+            })
+            .reduce(|| (T::default(), T::default()),
+             |(sum1, sq1), (sum2, sq2)| (sum1 + sum2, sq1 + sq2)
+            );
+
+            let n = T::from_usize(rows * cols);
+
+            let mean = sum / n;
+
+            let variance = (sum_eq / n) - mean * mean;
+            (mean, variance)
+    }
+
+    /// Computes the variance of all matrix elements.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    ///
+    /// let m = matrix![
+    ///     [1.0f32, 2.0],
+    ///     [3.0, 4.0]
+    /// ];
+    ///
+    /// let variance = m.var();
+    /// assert!((variance - 1.25).abs() < 1e-10);
+    /// ```
+    pub fn var(&self) -> T {
+        self.mean_var().1
+    }
+
+    /// Computes the mean (average) of all matrix elements.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::Matrix;
+    /// 
+    /// let m = matrix![
+    ///     [1.0, 2.0],
+    ///     [3.0, 4.0],
+    ///     [5.0, 6.0]
+    /// ];
+    ///
+    /// let mean = m.mean();
+    /// assert_eq!(mean, 3.5);
+    /// ```
+    pub fn mean(&self) -> T {
+        self.mean_var().0
+    }
+
+    /// Computes the mean of each row in the matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::{Vector, Matrix};
+    ///
+    /// let m = matrix![
+    ///     [1.0, 2.0, 3.0],
+    ///     [4.0, 5.0, 6.0],
+    ///     [7.0, 8.0, 9.0]
+    /// ];
+    ///
+    /// let row_means = m.mean_rows();
+    /// let expected = Vector::from(vec![2.0, 5.0, 8.0]);
+    /// assert_eq!(row_means, expected);
+    /// ```
+    pub fn mean_rows(&self) -> Vector<T> {
+        let rows = self.rows;
+        let cols = self.cols;
+        
+        let row_means: Vec<T> = (0..rows)
+            .into_par_iter()
+            .map(|row_idx| {
+                let start = row_idx * cols;
+                let end = start + cols;
+                let mut sum = T::default();
+                
+                for i in start..end {
+                    sum += self.data[i];
+                }
+                
+                sum / T::from_usize(cols)
+            })
+            .collect();
+
+        Vector::from(row_means)
+    }
+
+    /// Computes the mean of each column in the matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::{Vector, Matrix};
+    ///
+    /// let m = matrix![
+    ///     [1.0, 2.0, 3.0],
+    ///     [4.0, 5.0, 6.0]
+    /// ];
+    ///
+    /// let col_means = m.mean_cols();
+    /// let expected = Vector::from(vec![2.5, 3.5, 4.5]);
+    /// assert_eq!(col_means, expected);
+    /// ```
+    pub fn mean_cols(&self) -> Vector<T> {
+        let rows = self.rows;
+        let cols = self.cols;
+        
+        let zero_vec = vec![T::default(); cols];
+        
+        let column_sums: Vec<T> = (0..rows)
+            .into_par_iter()
+            .fold(
+                || zero_vec.clone(),
+                |mut acc, row_idx| {
+                    let start = row_idx * cols;
+                    for col_idx in 0..cols {
+                        acc[col_idx] += self.data[start + col_idx];
+                    }
+                    acc
+                }
+            )
+            .reduce(
+                || vec![T::default(); cols],
+                |mut acc, sums| {
+                    for i in 0..cols {
+                        acc[i] += sums[i];
+                    }
+                    acc
+                }
+            );
+        
+        let column_means: Vec<T> = column_sums
+            .into_iter()
+            .map(|sum| sum / T::from_usize(rows))
+            .collect();
+
+        Vector::from(column_means)
+    }
+
+    /// Computes the variance of each row in the matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::{Vector, Matrix};
+    ///
+    /// let m = matrix![
+    ///     [1.0f32, 2.0, 3.0],
+    ///     [4.0, 4.0, 4.0]
+    /// ];
+    ///
+    /// let row_vars = m.var_rows();
+    /// let expected = Vector::from(vec![2.0/3.0, 0.0]);
+    /// assert!((row_vars[0] - expected[0]).abs() < 1e-10);
+    /// ```
+    pub fn var_rows(&self) -> Vector<T> {
+        let rows = self.rows;
+        let cols = self.cols;
+        
+        let row_means: Vec<T> = (0..rows)
+            .into_par_iter()
+            .map(|row_idx| {
+                let start = row_idx * cols;
+                let end = start + cols;
+                let mut sum = T::default();
+                
+                for i in start..end {
+                    sum += self.data[i];
+                }
+                
+                sum / T::from_usize(cols)
+            })
+            .collect();
+        
+        let row_vars: Vec<T> = (0..rows)
+            .into_par_iter()
+            .map(|row_idx| {
+                let start = row_idx * cols;
+                let end = start + cols;
+                let mean = row_means[row_idx];
+                
+                let mut sum_sq = T::default();
+                for i in start..end {
+                    let diff = self.data[i] - mean;
+                    sum_sq += diff * diff;
+                }
+                
+                sum_sq / T::from_usize(cols)
+            })
+            .collect();
+
+        Vector::from(row_vars)
+    }
+    
+    /// Computes the variance of each column in the matrix.
+    ///
+    /// # Examples
+    /// ```
+    /// use tensorrs::matrix;
+    /// use tensorrs::linalg::{Vector, Matrix};
+    ///
+    /// let m = matrix![
+    ///     [1.0f32, 4.0],
+    ///     [2.0, 4.0],
+    ///     [3.0, 4.0]
+    /// ];
+    ///
+    /// let col_vars = m.var_cols();
+    /// let expected = Vector::from(vec![2.0/3.0, 0.0]);
+    /// assert!((col_vars[0] - expected[0]).abs() < 1e-10);
+    /// ```
+    pub fn var_cols(&self) -> Vector<T> {
+        let rows = self.rows;
+        let cols = self.cols;
+        
+        // Сначала вычисляем средние по столбцам
+        // let col_means = self.mean_cols();
+        
+        // Для дисперсии используем Welford's online algorithm
+        let variances: Vec<T> = (0..cols)
+            .into_par_iter()
+            .map(|col_idx| {
+                let mut mean = T::default();
+                let mut m2 = T::default();
+                
+                for row_idx in 0..rows {
+                    let value = self.data[row_idx * cols + col_idx];
+                    let delta = value - mean;
+                    mean += delta / (T::from_usize(row_idx) + T::one());
+                    let delta2 = value - mean;
+                    m2 += delta * delta2;
+                }
+                
+                m2 / T::from_usize(rows)
+            })
+            .collect();
+
+        Vector::from(variances)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::linalg::matrix::*;
+    use crate::linalg::Matrix;
+    use crate::linalg::Vector;
     use crate::{vector, DataType};
     use std::time::Instant;
+
+    #[test]
+    fn powf_matrix() {
+        let a = Matrix::from_diag(vector![1.0, 4.0, 9.0], 3, 3);
+
+        println!("{}", a.powf(0.5));
+
+        let a = matrix![
+            [2.0, 1.0],
+            [1.0, 2.0]
+        ];
+        
+        let result = a.powf(0.5);
+        
+        let result_squared: Matrix<f64> = &result * &result;
+        println!("{}", result_squared.map(|x| x.round()));
+
+        let a = matrix![
+            [4.0, 1.0],
+            [0.0, 9.0]
+        ];
+        
+        let result = a.powf(1.0);
+        println!("{result}");
+
+        let a = matrix![
+            [4.0, 1.0],
+            [0.0, 9.0]
+        ];
+        
+        let result = a.powf(0.0);
+
+        println!("{}", result);
+
+        let a = matrix![
+            [1.0, 1.0],
+            [0.0, 1.0]
+        ];
+
+        println!("{}", a.powf(3.0))
+    }
 
     #[test]
     fn from_fn() {
@@ -1721,6 +2400,15 @@ mod tests {
         assert_eq!(result.cols, 3);
         
         // В однородных областях должен быть 0
-        assert_eq!(result.data[1 * result.cols + 1], 0.0);
+        assert_eq!(result.data[1 * result.cols + 1], -3.0);
+    }
+
+    #[test]
+    fn iters() {
+        let a: Matrix<f32> = Matrix::randn(5, 3);
+        println!("{a}");
+        for i in a.indexed_iter() {
+            println!("{:?}", i);
+        }
     }
 }

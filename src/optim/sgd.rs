@@ -1,6 +1,6 @@
 use super::Optimizer;
-use crate::linalg::Matrix;
 use crate::Float;
+use crate::utils::{AutoGrad, VarRef};
 
 /// Stochastic Gradient Descent(SGD)
 ///
@@ -16,24 +16,29 @@ use crate::Float;
 /// - \nabla L(W_{t}) — gradient of the loss function with respect to the weights.
 /// ```
 pub struct SGD<T: Float> {
-    learning_rate: T,
+    params: Vec<VarRef<T>>,
+    lr: T,
 }
 
 impl<T: Float> SGD<T> {
-    pub fn new(learning_rate: T) -> Self {
-        Self { learning_rate }
+    pub fn new(params: Vec<VarRef<T>>, lr: T) -> Self {
+        Self { params, lr }
     }
 }
 
-impl<T: Float> Optimizer<T> for SGD<T> {
-    fn step(&mut self, _id: usize, weights: &mut Matrix<T>, gradients: &Matrix<T>) {
-        let g = gradients.clone() * self.learning_rate;
-        *weights = weights.clone() + &g;
+impl<T:Float> Optimizer<T> for SGD<T> {
+    fn step(&mut self) {
+        for param in &self.params {
+            let mut p = param.borrow_mut();
+            let grad = p.grad.borrow().shallow_copy();
+
+            p.value = &p.value - &(&grad * self.lr);
+        }    
     }
-    fn change_learning_rate(&mut self, new_learning_rate: T) {
-        self.learning_rate = new_learning_rate;
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
     }
 }
-
-#[cfg(test)]
-mod tests {}

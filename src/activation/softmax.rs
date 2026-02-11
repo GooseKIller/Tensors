@@ -1,7 +1,7 @@
-use crate::activation::Function;
-use crate::linalg::{Matrix, Vector};
 use crate::Float;
-use rayon::prelude::*;
+use crate::linalg::Tensor;
+use crate::activation::Module;
+use crate::utils::{AutoGrad, Var, sum_axis_op};
 
 /// Softmax function (normalized exponential function).
 ///
@@ -22,7 +22,7 @@ use rayon::prelude::*;
 ///
 /// let softmax = SoftMax::new();
 /// let input = matrix![[1.0, 2.0, 3.0]];
-/// let output = softmax.call(input);
+/// let output = softmax.forward(input);
 /// println!("Softmax output: {}", output);
 /// //[{0.09003057 0.24472848 0.66524094},
 /// // {0.090030566 0.24472846 0.66524094}]
@@ -36,123 +36,106 @@ impl SoftMax {
     pub fn new() -> Self {
         Self
     }
+}
 
-    fn vec_fun<T: Float>(&self, vector: Vector<T>) -> Vector<T> {
-        let max = vector.max_val().unwrap();
-        let exps = vector.map_vec(|x| (x - max).exp());
-        let sum: T = exps.sum_all();
-        exps.map_vec(|x| x / sum)
+impl<T: Float> Module<T> for SoftMax {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
+        let e = Var::leaf(Tensor::scalar(e_val), false);
+        let exp_x = &e ^ x;
+
+        // 2. Считаем сумму экспонент вдоль последней оси (axis = rank - 1)
+        // Нам обязательно нужен keepdim=true для последующего деления (broadcasting)
+        let axis = x.value().shape.len() - 1;
+        let sum_exp = sum_axis_op(&exp_x, axis, true);
+
+        // 3. Вычисляем вероятности: exp(x) / sum(exp(x))
+        // Здесь используется твой Div оператор
+        &exp_x / &sum_exp    
+    }
+
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        vec![]
     }
 }
 
-impl<T: Float> Function<T> for SoftMax {
-    fn name(&self) -> String {
-        String::from("SoftMax")
-    }
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T> {
-        /*
-        let mut data: Vec<Vector<T>> = Vec::with_capacity(matrix.rows);
-        for i in 0..matrix.rows {
-            let vector = self.vec_fun(matrix.get_row(i));
-            data.push(vector)
-        }
-        Matrix::from(data)
-         */
-        /*
-        let mut data: Vec<Vector<T>> = vec![vec![T::one()]; matrix.rows]
-            .iter()
-            .map(|x| Vector::from(vec![T::one()]))
-            .collect();
-
-        (0..matrix.rows)
-            .into_par_iter()
-            .for_each(|i| {
-            data[i] = self.vec_fun(matrix.get_row(i));
-        });
-         */
-        let data: Vec<Vector<T>> = (0..matrix.rows)
-            .into_par_iter()
-            .map(|i| self.vec_fun(matrix.get_row(i)))
-            .collect();
-
-        Matrix::from(data)
-    }
-
-    /// $`Softmax'(x_i)= Softmax(x_i) * (δ_{ij} - Softmax(x_j))`$
-    ///
-    /// $`δ_{ij}`$ - the Kronecker symbol, which is 1 when i = j, and 0 otherwise
-    ///
-    /// WARNING UNTESTED WELL AND DO NOT WORK NORMAL
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T> {
-        /*
-        //println!("MX:{matrix}");
-        let s = self.call(matrix.clone());
-        let size = (matrix.rows, matrix.cols);
-
-        // Параллельное вычисление градиентов для каждой строки
-        let grad_rows: Vec<Vector<T>> = (0..size.0)
-            .into_par_iter()
-            .map(|i| {
-                let row = s.get_row(i);
-                let diag = row.clone();
-                let outer = row.outer(&row);
-
-                //(0..size.1)
-                  //  .map(|j| diag[j] - outer[[j, j]])
-                    //.collect::<Vector<_>>();
-                let mut data = vec![T::default(); size.1];
-                data.iter_mut()
-                    .enumerate()
-                    .for_each(|(j, x)|{
-                        *x = diag[j] - outer[[j, j]];
-                    });
-                Vector::from(
-                    data
-                )
-            })
-            .collect();
-
-        Matrix::from(grad_rows)
-         */
-        let s = self.call(matrix.clone());
-        let grad_rows: Vec<Vector<T>> = (0..s.rows)
-            .into_par_iter()
-            .map(|i| {
-                let row = s.get_row(i);
-                row.map_vec(|x| x * (T::one() - x))
-            })
-            .collect();
-        Matrix::from(grad_rows)
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::activation::{Function, SoftMax};
-    use crate::linalg::Matrix;
-    use crate::matrix;
+    use super::*;
+    use crate::activation::*;
+    use crate::utils::Var;
+    use crate::tensor; // Предполагаю, у тебя есть макрос для создания тензоров
 
-    #[test]
-    fn softmax_call() {
-        let matrix = matrix![[2.0, 4.0], [1.0, 3.0]];
-        let a = SoftMax::new();
-        let matrix = a.call(matrix);
-        println!("{}", matrix);
+    // Вспомогательная функция для проверки близости значений
+    fn assert_approx(a: f32, b: f32) {
+        assert!((a - b).abs() < 1e-5, "Values not equal: {} and {}", a, b);
     }
 
     #[test]
-    fn der_softmax() {
-        let matrix = matrix![[2.0, 4.0], [1.0, 3.0]];
-        let a = SoftMax::new();
-        let matrix = a.derivative(matrix);
-        println!("{}", matrix);
+    fn test_activations_forward() {
+        let input_data = tensor![[-1.0, 0.0, 1.0]];
+        let x = Var::leaf(input_data, true);
+
+        // 1. ReLU: [-1, 0, 1] -> [0, 0, 1]
+        let relu_out = ReLU::new().forward(&x);
+        assert_eq!(relu_out.value().get_data(), vec![0.0, 0.0, 1.0]);
+
+        // 2. LeakyReLU (alpha=0.1): [-1, 0, 1] -> [-0.1, 0, 1]
+        let lrelu_out = LeakyReLU::new(0.1).forward(&x);
+        assert_eq!(lrelu_out.value().get_data(), vec![-0.1, 0.0, 1.0]);
+
+        // 3. Sigmoid: 0.0 -> 0.5
+        let sig_out = Sigmoid::new().forward(&x);
+        assert_approx(sig_out.value().get_data()[1], 0.5);
+
+        // 4. Tanh: 0.0 -> 0.0
+        let tanh_out = Tanh::new().forward(&x);
+        assert_approx(tanh_out.value().get_data()[1], 0.0);
     }
 
     #[test]
-    fn softmax() {
-        let matrix: Matrix<f32> = matrix![[0.9, 0.1, 0.8, 0.2]];
-        let softmax = SoftMax::new();
-        println!("{}", softmax.call(matrix.clone()));
-        println!("{}", softmax.derivative(matrix));
+    fn test_activations_gradients() {
+        // Проверяем, что градиент проходит через нелинейности
+        let x = Var::leaf(tensor![[-2.0, 2.0]], true);
+
+        // Тестируем ELU
+        let elu = ELU::new(1.0);
+        let out = elu.forward(&x);
+        out.backward(); 
+        
+        let grads = x.grad();
+        // Для x > 0, производная ELU = 1
+        assert_approx(grads.get_data()[1], 1.0);
+        // Для x < 0, производная ELU = alpha * e^x = 1.0 * e^(-2.0)
+        assert_approx(grads.get_data()[0], (-2.0f32).exp());
+        
+        x.zero_grad();
+    }
+
+    #[test]
+    fn test_softmax_logic() {
+        // Softmax должен давать в сумме 1.0
+        let x = Var::leaf(tensor![[1.0, 2.0, 3.0]], true);
+        let sm = SoftMax::new();
+        let out = sm.forward(&x);
+
+        let sum: f32 = out.value().get_data().iter().sum();
+        assert_approx(sum, 1.0);
+
+        // Проверяем, что самое большое число имеет наибольшую вероятность
+        let data = out.value().get_data();
+        assert!(data[2] > data[1] && data[1] > data[0]);
+    }
+
+    #[test]
+    fn test_selu_scaling() {
+        let x = Var::leaf(tensor![[1.0]], true);
+        let selu = SELU::new(0.0); // Параметры подтянутся из трейта Float
+        let out = selu.forward(&x);
+        
+        // Для x > 0: lambda * x
+        // По умолчанию lambda ≈ 1.0507
+        assert_approx(out.value().get_data()[0], 1.0507);
     }
 }

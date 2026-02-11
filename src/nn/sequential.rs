@@ -1,4 +1,95 @@
-use crate::activation::Function;
+use crate::{Float, activation::Module};
+
+
+/// A simple implementation of a Multilayer Perceptron (MLP).
+///
+/// This struct represents a sequential model composed of multiple layers,
+/// where each layer can be a linear transformation followed by an activation function.
+/// # Example
+/// ```
+/// use tensorrs::activation::Sigmoid;
+/// use tensorrs::nn::{Linear, Sequential};
+/// // Define the layers of the MLP
+/// let model = Sequential::new(vec![
+///             Box::new(Linear::<f32>::new(2, 2, true)),// First layer: Linear transformation
+///             Box::new(Sigmoid::new()),// Activation function
+///             Box::new(Linear::new(2, 1, true)),// Second layer: Linear transformation
+///             Box::new(Sigmoid::new())// Activation function
+/// ]);
+/// ```
+pub struct Sequential<T:Float> {
+    layers: Vec<Box<dyn  Module<T>>>,
+}
+
+impl<T: Float> Sequential<T> {
+    pub fn new(layers: Vec<Box<dyn Module<T>>>) -> Self {
+        Self { layers }
+    }
+
+    pub fn add<F: Module<T> + 'static>(&mut self, layer: F) {
+        self.layers.push(Box::new(layer));
+    }
+}
+
+impl<T: Float> Module<T> for Sequential<T> {
+    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+        let mut out = x.clone();
+        for layer in &self.layers {
+            out = layer.forward(&out);
+        }
+        out
+    }
+    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+        let mut params = vec![];
+        for layer in &self.layers {
+            params = [params, layer.parameters()].concat()
+        }
+        params
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{activation::{Module, ReLU, Sigmoid}, loss::*, nn::{Linear, Sequential}, optim::{Adam, Optimizer, RMSprop}, tensor, utils::{AutoGrad, Var}};
+
+    #[test]
+    fn seq_test() {
+        let x_val = tensor![[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
+        let y_val = tensor![[0.0], [1.0], [1.0], [0.0]];
+
+        let layers: Sequential<f32> = Sequential::new(vec![
+            Box::new(Linear::new(2, 3, true)),
+            Box::new(ReLU::new()),
+            Box::new(Linear::new(3, 1, true)),
+            Box::new(Sigmoid::new()),
+        ]);
+        let x = Var::leaf(x_val, false);
+        let y = Var::leaf(y_val, false);
+        
+        let mut optim = RMSprop::new(layers.parameters(), 0.1);
+        for i in 0..1000 {
+            let y_pred = layers.forward(&x);
+            let loss = binary_cross_entropy(&y_pred, &y);
+
+            loss.backward();
+            optim.step();
+            if i % 100 == 0{
+                println!("{i}: {}", y_pred.value());
+                println!("{i}: {}", loss.value());
+            }
+            loss.zero_grad();
+
+            if loss.value().item() < 0.01 {
+                println!("Early exit");
+                println!("{i}: {}", y_pred.value());
+                println!("{i}: {}", loss.value());
+                break;
+            }
+            //break;
+        }
+    }
+}
+/*
 use crate::linalg::Matrix;
 use crate::loss::Loss;
 use crate::nn::Linear;
@@ -278,13 +369,15 @@ impl<T: Float> Index<usize> for Sequential<T> {
     }
 }
 
+pub type VecSeq<T> = Vec<Box<dyn Function<T>>>;
+
 #[cfg(test)]
 mod test {
     use crate::activation::{Function, Sigmoid, Tanh};
     use crate::linalg::{Matrix, Vector};
     use crate::loss::{CrossEntropy, MSE, SSE};
     use crate::nn::sequential::Sequential;
-    use crate::nn::Linear;
+    use crate::nn::{Linear, VecSeq};
     use crate::optim::{Adam, SGD};
     use crate::{matrix, DataType};
     use crate::utils::one_hot_encoding;
@@ -294,7 +387,7 @@ mod test {
         let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
         let output = matrix![[0.0], [1.0], [1.0], [0.0]];
 
-        let layers: Vec<Box<dyn Function<f32>>> = vec![
+        let layers: VecSeq<f32> = vec![
             Box::new(Linear::new(2, 2, true)),
             Box::new(Sigmoid::new()),
             Box::new(Linear::new(2, 1, true)),
@@ -390,3 +483,4 @@ mod test {
 
     }
 }
+*/

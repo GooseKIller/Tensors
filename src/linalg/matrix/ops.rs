@@ -5,8 +5,23 @@ use rayon::prelude::*;
 use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 
-pub fn mtrxdot<T: Num>(a: &Matrix<T>, b: &Matrix<T>) -> Matrix<T>
-{
+/// Matrix mulitplication
+/// 
+/// Panics if multiplaction if dimensions is inconsistent
+/// 
+/// Autoamtically desides wheater use parallel computation or not
+/// 
+/// # Example
+/// ```
+/// use tensorrs::{linalg::{Matrix, mtrxdot}, matrix};
+/// 
+/// 
+/// let a = matrix![[1.0, 2.0], [3.0, 4.0]];
+/// let b = matrix![[0.0, 4.0], [6.0, 5.0]];
+/// 
+/// let _c = mtrxdot(&a, &b);
+/// ```
+pub fn mtrxdot<T: Num>(a: &Matrix<T>, b: &Matrix<T>) -> Matrix<T> {
     assert_eq!(
         a.cols, b.rows,
         "Matrix multiplication shape mismatch: left = ({},{}) right = ({},{})",
@@ -15,13 +30,10 @@ pub fn mtrxdot<T: Num>(a: &Matrix<T>, b: &Matrix<T>) -> Matrix<T>
 
     let rows = a.rows;
     let cols = b.cols;
-    let k = a.cols; // == b.rows
+    let k = a.cols;
 
-    // Порог — если результат меньше или равен, выполняем в одном потоке.
-    // Настройте под свои данные/машину. Уменьшите порог -> чаще однопоточно.
     let small_threshold = 19 * 19;
 
-    // Транспонируем b в rhs_t: rhs_t[j * k + p] == b.data[p * b.cols + j] == b[[p,j]]
     let mut rhs_t = vec![T::default(); cols * k];
     for p in 0..k {
         for j in 0..cols {
@@ -32,24 +44,19 @@ pub fn mtrxdot<T: Num>(a: &Matrix<T>, b: &Matrix<T>) -> Matrix<T>
     let mut data = vec![T::default(); rows * cols];
 
     if rows * cols <= small_threshold {
-        // Однопоточная версия для маленьких матриц
         for i in 0..rows {
             let a_row_base = i * a.cols;
             let out_row_base = i * cols;
             for j in 0..cols {
                 let mut sum = T::default();
                 let rt_base = j * k;
-                // суммируем по p
                 for p in 0..k {
-                    // a[i,p] == a.data[a_row_base + p]
                     sum += a.data[a_row_base + p] * rhs_t[rt_base + p];
                 }
                 data[out_row_base + j] = sum;
             }
         }
     } else {
-        // Параллельная версия: параллелим по строкам результата
-        // par_chunks_mut разделяет `data` на срезы по `cols` элементов — каждая строка.
         data.par_chunks_mut(cols).enumerate().for_each(|(i, out_row)| {
             let a_row_base = i * a.cols;
             for j in 0..cols {
@@ -197,11 +204,11 @@ impl<T: Num> Sub<&Matrix<T>> for &Matrix<T> {
             rhs.rows,
             rhs.cols
         );
-        let mut data = vec![T::default(); self.rows * self.cols];
-        data.par_iter_mut().enumerate().for_each(|(i, x)| {
-            *x = self.data[i] - rhs.data[i];
-        });
-        Matrix::new(data, self.rows, self.cols)
+            let mut data = vec![T::default(); self.rows * self.cols];
+            data.par_iter_mut().enumerate().for_each(|(i, x)| {
+                *x = self.data[i] - rhs.data[i];
+            });
+            Matrix::new(data, self.rows, self.cols)
     }
 }
 
@@ -316,18 +323,6 @@ impl<T: Num> Mul<&Matrix<T>> for Matrix<T> {
                    "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
     Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.shape(), rhs.shape());
         mtrxdot(&self, rhs)
-        /*
-        let mut data = vec![T::default(); self.rows * rhs.cols];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            let (i, j) = (index / rhs.cols, index % rhs.cols);
-            let mut sum = T::default();
-            for k in 0..self.cols {
-                sum += self[[i, k]] * rhs[[k, j]];
-            }
-            *x = sum;
-        });
-        Self::new(data, self.rows, rhs.cols)
-        */
     }
 }
 
@@ -337,18 +332,6 @@ impl<T: Num> Mul<&Matrix<T>> for &Matrix<T> {
         assert_eq!(self.cols, rhs.rows, "!!!Matrix amount of columns in the 1st matrix != amount of rows in the 2nd matrix!!!\n\
     Matrix shape: {:?}, Other Matrix shape: {:?}\nCan't multiply", self.shape(), rhs.shape());
         mtrxdot(self, rhs)
-        /*
-        let mut data = vec![T::default(); self.rows * rhs.cols];
-        data.par_iter_mut().enumerate().for_each(|(index, x)| {
-            let (i, j) = (index / rhs.cols, index % rhs.cols);
-            let mut sum = T::default();
-            for k in 0..self.cols {
-                sum += self[[i, k]] * rhs[[k, j]];
-            }
-            *x = sum;
-        });
-        Matrix::new(data, self.rows, rhs.cols)
-        */
     }
 }
 
@@ -360,22 +343,6 @@ impl<T: Num> MulAssign<&Matrix<T>> for Matrix<T> {
             "!!!Matrix amount of columns in the 1st matrix \
                     does not equal the amount of rows in the 2nd matrix!!!\nCan't multiply"
         );
-        /*
-
-        let mut result = Self::from_num(T::default(), self.rows, rhs.cols);
-        result
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(index, x)| {
-                let (i, j) = (index / rhs.cols, index % rhs.cols);
-                let mut sum = T::default();
-                for k in 0..self.cols {
-                    sum += self[[i, k]] * rhs[[k, j]];
-                }
-                *x = sum;
-            });
-        */
         *self = mtrxdot(&self, rhs)//result;
     }
 }
@@ -518,13 +485,11 @@ impl<T:Num> DivAssign<T> for Matrix<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::linalg::Matrix;
-
-
     #[test]
     fn mx_multiplication_test() {
         use std::time::Instant;
         use rayon::prelude::*;
+        use crate::linalg::matrix::*;
 
         // helper: прогрев + среднее время из `runs` прогонов
         fn measure_avg<F: Fn() -> Matrix<f32>>(f: F, runs: usize) -> std::time::Duration {
@@ -599,7 +564,6 @@ mod tests {
             Matrix::new(data, rows, cols)
         }
 
-        // main loop: n = 5 .. 127
         let runs = 3usize;
         println!("n, lib_us, st_us, par_us, rayon_threads");
         for n in 5usize..128 {
@@ -608,7 +572,7 @@ mod tests {
 
             // measure library function (если доступна)
             let avg_lib = std::panic::catch_unwind(|| {
-                measure_avg(|| crate::linalg::matrix_ops::mtrxdot(&a, &b), runs)
+                measure_avg(|| crate::linalg::mtrxdot(&a, &b), runs)
             });
 
             // measure references
