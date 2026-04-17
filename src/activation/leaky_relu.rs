@@ -1,4 +1,4 @@
-use crate::{Float, activation::Module, utils::{AutoGrad, Var}};
+use crate::{Float, activation::Module, autodiff::{AutoGrad, Var}};
 
 /// Leaky ReLU activation function.
 ///
@@ -33,7 +33,7 @@ impl<T: Float> LeakyReLU<T> {
 }
 
 impl<T: Float> Module<T> for LeakyReLU<T> {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let x_val = x.value();
 
         let m_pos = Var::leaf(
@@ -53,7 +53,7 @@ impl<T: Float> Module<T> for LeakyReLU<T> {
         &pos_part + &neg_part
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

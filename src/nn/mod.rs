@@ -7,13 +7,13 @@
 mod linear;
 mod sequential;
 mod rnn;
-mod linear_builder;
 #[allow(dead_code)]
 mod conv2d;
 mod dropout;
+mod layer_norm;
 
 pub use linear::*;
 pub use sequential::*;
-pub use linear_builder::*;
 pub use dropout::*;
+pub use layer_norm::*;
 //pub use rnn::*;

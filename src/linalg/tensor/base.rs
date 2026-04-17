@@ -1,9 +1,9 @@
 use rand::random;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use std::{sync::Arc, usize};
 //use rayon::prelude::*;
-use crate::{Float, Num, linalg::Vector};
-//use std::ops::{Index, IndexMut};
+use crate::{Float, Num, linalg::{Vector, broadcast_shape}};
+use std::ops::{Index, IndexMut};
 use std::fmt::{Debug, Display, Formatter};
 //use crate::linalg::{Matrix, Vector};
 //use rayon::prelude::IntoParallelRefMutIterator;
@@ -67,9 +67,9 @@ pub struct Tensor<T> {
 
 impl<T: Clone> Tensor<T> {
     pub fn new(data: Vec<T>, shape: Vec<usize>) -> Self {
-        if data.len() == 1 {
+        /*if data.len() == 1 {
             return Self::scalar(data[0].clone());
-        }
+        }*/
         assert_eq!(data.len(), product(&shape[..]),
          "!!!Inconsistent data and dimensions combination for tensor!!!"
         );
@@ -268,6 +268,7 @@ impl<T: Clone> Tensor<T> {
         let dst_ndim = target_shape.len();
         
         if src_ndim > dst_ndim {
+            eprintln!("SRC ndim > DST NDIM");
             return None;
         }
 
@@ -292,6 +293,7 @@ impl<T: Clone> Tensor<T> {
             } else if src_dim == 1 {
                 new_strides[dst_ndim - 1 - i] = 0;
             } else {
+                eprintln!("src_dim != 1 || src_dim !- dst_dim");
                 return None;
             }
         }
@@ -327,6 +329,48 @@ impl<T: Clone> Tensor<T> {
         self.is_contiguous()
             && Arc::strong_count(&self.storage) == 1
             && !self.strides.iter().any(|&s| s == 0)
+    }
+}
+
+impl<T: Clone> Index<&[usize]> for Tensor<T> {
+    type Output = T;
+
+    fn index(&self, index: &[usize]) -> &Self::Output {
+        if index.len() != self.shape.len() {
+            panic!("!!!Incompatible shapes!!!");
+        }
+
+        let mut idx: isize = self.offset;
+
+        for (i, &ind) in index.iter().enumerate() {
+            if ind >= self.shape[i] {
+                panic!("Index out of bounds");
+            }
+            idx += self.strides[i] * ind as isize;
+        }
+
+        &self.storage.data[idx as usize]
+    }
+}
+
+impl<T: Clone> IndexMut<&[usize]> for Tensor<T> {
+    fn index_mut(&mut self, index: &[usize]) -> &mut Self::Output {
+        if index.len() != self.shape.len() {
+            panic!("!!!Incompatible shapes!!!");
+        }
+
+        let mut idx: isize = self.offset;
+
+        for (i, &ind) in index.iter().enumerate() {
+            if ind >= self.shape[i] {
+                panic!("Index out of bounds");
+            }
+            idx += self.strides[i] * ind as isize;
+        }
+
+        // copy-on-write через Arc::make_mut
+        let storage = Arc::make_mut(&mut self.storage); // клонирует Storage при наличии других Arc
+        &mut storage.data[idx as usize]
     }
 }
 
@@ -531,23 +575,49 @@ impl<T: Num> Tensor<T> {
     }
 
     pub fn reduce_to_shape(&self, target: &[usize]) -> Option<Tensor<T>> {
-        // 1. You cannot reduce a tensor to a higher-rank shape
+        // For backward compatibility, try reduce_broadcast first
+        self.reduce_broadcast_grad(target)
+    }
+    
+    /// Reduce gradient to target shape by summing over dimensions that were broadcast.
+    /// This handles the case where we broadcast from smaller to larger shape in forward pass.
+    /// Example: forward [1,1] + [101,1] = [101,1], backward needs [101,1] -> [1,1]
+    pub fn reduce_broadcast_grad(&self, target: &[usize]) -> Option<Tensor<T>> {
+        // Handle case where self has smaller rank (need to expand and sum)
         if self.shape.len() < target.len() {
-            return None;
+            // Expand self to match target rank by prepending 1s
+            let mut expanded_shape = vec![1; target.len() - self.shape.len()];
+            expanded_shape.extend(self.shape.clone());
+            
+            // First reshape to expanded shape (all 1s)
+            if self.numel() == 1 {
+                // Scalar broadcasts to everything - just reshape
+                return Some(Tensor::from_num(self.item(), target.to_vec()));
+            }
+            
+            // Need to sum over the new dimensions
+            let mut out = self.shallow_copy();
+            let diff = target.len() - self.shape.len();
+            for _i in 0..diff {
+                // Sum over the new leading dimensions
+                out = out.sum_axis(0);
+            }
+            
+            // Now ranks match, continue with normal reduction
+            return out.reduce_broadcast_grad(target);
         }
-
+        
         let mut out = self.shallow_copy();
         
-        // 2. Reduce leading dimensions until ranks match
-        // Example: self [4, 2, 3] -> target [2, 1]
-        // First, sum axis 0: [4, 2, 3] -> [2, 3]
+        // Reduce leading dimensions until ranks match
         while out.get_shape().len() > target.len() {
             out = out.sum_axis(0);
         }
 
-        // 3. Now ranks match. Iterate and reduce dimensions where target is 1.
-        // We iterate through the current shape. 
-        // Important: if we remove an axis, the indices of the remaining axes shift!
+        // Now ranks match. For each dimension:
+        // - if target[i] == 1 and out[i] > 1: sum over that axis
+        // - if target[i] == out[i]: keep
+        // - if target[i] > out[i]: can't handle (shouldn't happen in broadcast backward)
         let mut i = 0;
         while i < out.get_shape().len() {
             let current_shape = out.get_shape();
@@ -557,13 +627,15 @@ impl<T: Num> Tensor<T> {
             if t == 1 && s > 1 {
                 out = out.sum_axis(i);
                 // After sum_axis, the rank decreases. 
-                // The "next" dimension is now at the SAME index 'i'.
-                // So we do NOT increment 'i' here.
             } else if s == t {
                 i += 1;
             } else {
-                // Shapes are incompatible (e.g., trying to reduce 3 to 2)
-                return None;
+                // Incompatible - try to handle by summing
+                if s > t {
+                    out = out.sum_axis(i);
+                } else {
+                    return None;
+                }
             }
         }
 
@@ -578,6 +650,95 @@ impl<T: Num> Tensor<T> {
         new_data.par_iter_mut().for_each(|x| *x = f(*x));
 
         Self::new(new_data, self.shape.clone())
+    }
+
+
+    pub fn mul_sum(&self, rhs: &Self) -> T {
+        if self.is_contiguous() && rhs.is_contiguous()  && self.shape == rhs.shape {
+            return self.mul_sum_contiguous(rhs);
+        }
+        let shape = broadcast_shape(&self.shape[..], &rhs.shape[..])
+        .expect("!!!Uncopatable shape!!!");
+
+        let a_view = self.broadcast_to(&shape).expect("broadcast_to failed (bug)");
+        let b_view = rhs.broadcast_to(&shape).expect("broadcast_to failed (bug)");
+
+        let a_data = &a_view.storage.data;
+        let b_data = &b_view.storage.data;
+        let a_idx = a_view.storage_indices();
+        let b_idx = b_view.storage_indices();
+
+        let n = product(&shape[..]);
+
+        if n < 1024 {
+            (0..n)
+                .map(|i| a_data[a_idx[i]] * b_data[b_idx[i]])
+                .sum()
+        } else {
+            (0..n)
+                .into_par_iter()
+                .map(|i| a_data[a_idx[i]] * b_data[b_idx[i]])
+                .sum()
+        }
+    }
+
+    fn mul_sum_contiguous(&self, rhs: &Self) -> T {
+        let a = &self.storage.data;
+        let b = &rhs.storage.data;
+
+        a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| *x * *y)
+        .sum()
+    }
+
+    pub fn window<'a>(
+        &'a self,
+        kernel: &[usize],
+        stride: &[usize],
+    ) -> impl Iterator<Item = Tensor<T>> + 'a {
+        assert_eq!(kernel.len(), self.shape.len());
+        assert_eq!(stride.len(), self.shape.len());
+
+        let kernel = kernel.to_vec();   // ← копия
+        let stride = stride.to_vec();   // ← копия
+
+        let out_shape: Vec<usize> = self.shape.iter()
+            .zip(kernel.iter())
+            .zip(stride.iter())
+            .map(|((&dim, &k), &s)| {
+                assert!(dim >= k);
+                (dim - k) / s + 1
+            })
+            .collect();
+
+        let total = product(&out_shape);
+
+        let base_strides = self.strides.clone();
+        let base_offset = self.offset;
+        let storage = self.storage.clone();
+
+        (0..total).map(move |idx| {
+            let mut tmp = idx;
+            let mut coord = vec![0; out_shape.len()];
+
+            for i in (0..coord.len()).rev() {
+                coord[i] = tmp % out_shape[i];
+                tmp /= out_shape[i];
+            }
+
+            let mut offset = base_offset;
+            for i in 0..coord.len() {
+                offset += coord[i] as isize * stride[i] as isize * base_strides[i];
+            }
+
+            Tensor {
+                storage: storage.clone(),
+                shape: kernel.clone(),
+                strides: base_strides.clone(),
+                offset,
+            }
+        })
     }
 }
 

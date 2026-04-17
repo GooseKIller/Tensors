@@ -32,14 +32,14 @@ impl<T: Float> Sequential<T> {
 }
 
 impl<T: Float> Module<T> for Sequential<T> {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let mut out = x.clone();
         for layer in &self.layers {
             out = layer.forward(&out);
         }
         out
     }
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         let mut params = vec![];
         for layer in &self.layers {
             params = [params, layer.parameters()].concat()
@@ -50,7 +50,7 @@ impl<T: Float> Module<T> for Sequential<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{activation::{Module, ReLU, Sigmoid}, loss::*, nn::{Linear, Sequential}, optim::{Adam, Optimizer, RMSprop}, tensor, utils::{AutoGrad, Var}};
+    use crate::{activation::{Module, ReLU, Sigmoid}, loss::*, nn::{Linear, Sequential}, optim::{Adam, Optimizer}, tensor, autodiff::{AutoGrad, Var}};
 
     #[test]
     fn seq_test() {
@@ -58,15 +58,15 @@ mod tests {
         let y_val = tensor![[0.0], [1.0], [1.0], [0.0]];
 
         let layers: Sequential<f32> = Sequential::new(vec![
-            Box::new(Linear::new(2, 3, true)),
+            Box::new(Linear::new(2, 4, true)),
             Box::new(ReLU::new()),
-            Box::new(Linear::new(3, 1, true)),
+            Box::new(Linear::new(4, 1, true)),
             Box::new(Sigmoid::new()),
         ]);
         let x = Var::leaf(x_val, false);
         let y = Var::leaf(y_val, false);
         
-        let mut optim = RMSprop::new(layers.parameters(), 0.1);
+        let mut optim = Adam::new(layers.parameters(), 0.1);
         for i in 0..1000 {
             let y_pred = layers.forward(&x);
             let loss = binary_cross_entropy(&y_pred, &y);
@@ -380,7 +380,7 @@ mod test {
     use crate::nn::{Linear, VecSeq};
     use crate::optim::{Adam, SGD};
     use crate::{matrix, DataType};
-    use crate::utils::one_hot_encoding;
+    use crate::autodiff::one_hot_encoding;
 
     #[test]
     fn learn_xor_test() {

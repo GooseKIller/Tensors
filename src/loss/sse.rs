@@ -1,5 +1,5 @@
 use crate::Float;
-use crate::utils::VarRef;
+use crate::autodiff::VarRef;
 
 /// Sum of Squared Errors (SSE) loss function.
 ///

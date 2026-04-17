@@ -1,7 +1,7 @@
 [package]
 name = "tensorrs"
 version = "0.3.3"
-authors = ["Anton Krop antonjobonly@gmail,com"]
+authors = ["Anton Krop antonjobonly@gmail.com"]
 edition = "2021"
 description = "Tensors is a lightweight machine learning library in Rust"
 repository = "https://github.com/GooseKIller/Tensors"

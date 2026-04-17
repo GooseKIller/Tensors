@@ -1,6 +1,6 @@
 use super::Optimizer;
 use crate::Float;
-use crate::utils::{AutoGrad, VarRef};
+use crate::autodiff::{AutoGrad, VarRef};
 
 /// Stochastic Gradient Descent(SGD)
 ///
@@ -40,5 +40,9 @@ impl<T:Float> Optimizer<T> for SGD<T> {
         for param in &self.params {
             param.zero_grad();
         }
+    }
+    
+    fn params(&self) -> Vec<crate::autodiff::VarRef<T>> {
+        self.params.clone()
     }
 }

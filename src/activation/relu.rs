@@ -1,4 +1,4 @@
-use crate::{Float, activation::Module, utils::{AutoGrad, Var}};
+use crate::{Float, activation::Module, autodiff::{AutoGrad, Var}};
 
 /// Rectified Linear Unit (ReLU) activation function.
 ///
@@ -30,7 +30,7 @@ impl ReLU {
 }
 
 impl<T:Float> Module<T> for ReLU {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let x_val = x.value();
 
         let m_pos = Var::leaf(
@@ -40,7 +40,7 @@ impl<T:Float> Module<T> for ReLU {
 
         x & &m_pos
     }
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

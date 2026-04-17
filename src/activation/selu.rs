@@ -1,4 +1,4 @@
-use crate::{Float, activation::Module, linalg::Tensor, utils::{AutoGrad, Var}};
+use crate::{Float, activation::Module, linalg::Tensor, autodiff::{AutoGrad, Var}};
 
 /// Scaled Exponential Linear Unit (SELU).
 ///
@@ -28,7 +28,7 @@ pub struct SELU<T: Float> {
 }
 
 impl<T: Float> SELU<T> {
-    pub fn new(_datatype_number: T) -> Self {
+    pub fn new() -> Self {
         let alpha: T = T::selu_alpha(T::default());
         let lambda: T = T::selu_lambda(T::default());
         Self { alpha, lambda }
@@ -46,7 +46,7 @@ impl<T: Float> From<(T, T)> for SELU<T> {
 }
 
 impl<T: Float> Module<T> for SELU<T> {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let x_val = x.value();
 
         let m_pos = Var::leaf(
@@ -70,7 +70,7 @@ impl<T: Float> Module<T> for SELU<T> {
         &pos_part + neg_part
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

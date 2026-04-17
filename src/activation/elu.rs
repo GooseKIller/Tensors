@@ -1,7 +1,7 @@
 use crate::activation::Module;
 use crate::linalg::Tensor;
 use crate::Float;
-use crate::utils::{AutoGrad, Var, VarRef};
+use crate::autodiff::{AutoGrad, Var, VarRef};
 
 /// Exponential Linear Unit (ELU) activation function.
 ///
@@ -55,7 +55,6 @@ impl<T:Float> Module<T> for ELU<T> {
 
         let pos_part = x & &m_pos;
 
-        // 3. Отрицательная ветка: alpha * (e^x - 1) * mask_neg
         let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
         let e = Var::leaf(Tensor::scalar(e_val), false);
         let exp_x = &e ^ x;
@@ -65,7 +64,7 @@ impl<T:Float> Module<T> for ELU<T> {
         &pos_part + neg_part
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

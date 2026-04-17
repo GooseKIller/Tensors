@@ -11,24 +11,37 @@
 //!
 //! ## Example
 //! ```rust
-//! use tensorrs::activation::Function;
-//! use tensorrs::DataType;
-//! use tensorrs::linalg::{Matrix, Vector};
-//! use tensorrs::nn::{Linear, Sequentia, VecSeq};
-//! use tensorrs::optim::Adam;
-//! use tensorrs::loss::MSE;
-//! use tensorrs::loss::Loss;
-//!
-//! let x = Matrix::from(Vector::range(-1.0, 1.0, 0.125).unwrap());
-//! let y:Matrix<f32> = 8.0 * &x - 10.0;
-//!
-//! let layers: VecSeq<f32> = vec![Box::new(Linear::new(1, 1, true))];
-//! let mut optim = Adam::new(0.001, &layers);
-//! let mut model = Sequential::new(layers);
-//! let loss = MSE::new(DataType::f32());
-//!
-//! for _ in 0..1000 {
-//!     model.train(x.transpose(), y.transpose(), &mut optim, &loss);
+//! use tensorrs::{activation::Module,
+//!     linalg::{Tensor, Vector},
+//!     loss::mse, nn::{Linear, Sequential},
+//!     optim::{Adam, Optimizer},
+//!     autodiff::{AutoGrad, Var}};
+//! 
+//! let x_val = Tensor::from(Vector::linspace(-1.0, 1.0, 8, true)).reshape(vec![8, 1]);
+//! let y_val = &x_val * 8.0 - 10.0;
+//! 
+//! let x = Var::leaf(x_val, false);
+//! let y = Var::leaf(y_val, false);
+//! 
+//! let model = Sequential::new(vec![
+//!     Box::new(Linear::new(1,1, true))
+//! ]);
+//! 
+//! let mut optim = Adam::new(model.parameters(), 0.1);
+//! for i in 0..1000 {
+//!     optim.zero_grad();
+//!     let output = model.forward(&x);
+//!     let loss = mse(&y, &output);
+//! 
+//!     loss.backward();
+//!     if i % 100 == 0 {
+//!         let val = loss.value().item();
+//!         println!("{}", val);
+//!         if val < 0.001 {
+//!             break;
+//!         }
+//!     }
+//!     optim.step();
 //! }
 //! ```
 //! Thanks for using Tensors!!!
@@ -44,6 +57,7 @@ pub mod linalg;
 pub mod loss;
 pub mod nn;
 pub mod optim;
+pub mod autodiff;
 pub mod utils;
 //pub(crate) mod onnx_pb;
 
@@ -111,6 +125,7 @@ pub trait Float: Num {
 
     fn selu_alpha(self) -> Self;
 
+    fn from_f32(value: f32) -> Self;
     fn from_f64(value: f64) -> Self;
     fn from_usize(value: usize) -> Self;
 
@@ -167,6 +182,11 @@ impl Float for f32 {
     fn selu_alpha(self) -> Self {
         1.67326f32
     }
+
+    fn from_f32(value: f32) -> Self {
+        value
+    }
+
     fn from_f64(value: f64) -> Self {
         value as f32
     }
@@ -197,6 +217,10 @@ impl Float for f64 {
 
     fn selu_alpha(self) -> Self {
         1.673263f64
+    }
+
+    fn from_f32(value: f32) -> Self {
+        value as f64
     }
 
     fn from_f64(value: f64) -> Self {
@@ -237,5 +261,46 @@ impl DataType {
     }
     pub fn f64() -> f64 {
         0f64
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::{activation::Module,
+        linalg::{Tensor, Vector},
+        loss::mse, nn::{Linear, Sequential},
+        optim::{Adam, Optimizer},
+         autodiff::{AutoGrad, Var}};
+
+    #[test]
+    fn test_example() {
+        let x_val = Tensor::from(Vector::linspace(-1.0, 1.0, 8, true)).reshape(vec![8, 1]);
+        let y_val = &x_val * 8.0 - 10.0;
+
+        let x = Var::leaf(x_val, false);
+        let y = Var::leaf(y_val, false);
+
+        let model = Sequential::new(vec![
+            Box::new(Linear::new(1,1, true))
+        ]);
+
+        let mut optim = Adam::new(model.parameters(), 0.1);
+        for i in 0..1000 {
+            optim.zero_grad();
+            let output = model.forward(&x);
+            let loss = mse(&y, &output);
+
+            loss.backward();
+            if i % 100 == 0 {
+                let val = loss.value().item();
+                println!("{}", val);
+                if val < 0.001 {
+                    break;
+                }
+            }
+
+            optim.step();
+        }
     }
 }

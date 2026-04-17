@@ -1,4 +1,4 @@
-use crate::{Float, activation::Module, linalg::Tensor, utils::{AutoGrad, Var}};
+use crate::{Float, activation::Module, linalg::Tensor, autodiff::{AutoGrad, Var}};
 
 pub struct Dropout {
     p: f32, // Вероятность отключения (например, 0.5)
@@ -11,7 +11,7 @@ impl Dropout {
 }
 
 impl<T: Float> Module<T> for Dropout {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         // Во время обучения: генерируем маску из 0 и 1
         // Во время теста (inference): просто возвращаем x * (1-p)
         // Но для твоего движка пока сделаем упрощенную версию для обучения:
@@ -33,7 +33,7 @@ impl<T: Float> Module<T> for Dropout {
         x & &mask
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

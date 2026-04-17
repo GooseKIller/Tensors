@@ -1,4 +1,4 @@
-use crate::{Float, utils::{AutoGrad, VarRef, log_op}};
+use crate::{Float, autodiff::{AutoGrad, VarRef, log_op}};
 
 pub fn binary_cross_entropy<T: Float>(pred: &VarRef<T>, target: &VarRef<T>) -> VarRef<T> {
     let eps = T::f32_f64(1e-7, 1e-12); // Чуть меньше eps

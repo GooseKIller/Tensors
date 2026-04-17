@@ -1,4 +1,4 @@
-use crate::{Float, activation::Module, linalg::Tensor, utils::Var};
+use crate::{Float, activation::Module, linalg::Tensor, autodiff::Var};
 
 /// Hyperbolic Tangent (Tanh) activation function.
 ///
@@ -13,12 +13,13 @@ use crate::{Float, activation::Module, linalg::Tensor, utils::Var};
 /// # Examples
 /// ```
 /// use tensorrs::activation::{Module, Tanh};
-/// use tensorrs::linalg::Matrix;
+/// use tensorrs::linalg::Tensor;
+/// use tensorrs::autodiff::{Var, AutoGrad};
 ///
 /// let tanh = Tanh::new();
-/// let input = Matrix::from(vec![vec![0.0], vec![1.0], vec![-1.0]]);
-/// let output = tanh.forward(input);
-/// println!("Tanh output: {}", output);
+/// let input = Tensor::from(vec![vec![0.0], vec![1.0], vec![-1.0]]);
+/// let output = tanh.forward(&Var::leaf(input, false));
+/// println!("Tanh output: {}", output.value());
 /// ```
 ///
 /// # See Also
@@ -36,7 +37,7 @@ impl Tanh {
 }
 
 impl<T: Float> Module<T> for Tanh {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
         let e = Var::leaf(Tensor::scalar(e_val), false);
 
@@ -52,7 +53,7 @@ impl<T: Float> Module<T> for Tanh {
         &numerator / &denominator
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }

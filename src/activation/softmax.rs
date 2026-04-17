@@ -1,7 +1,7 @@
 use crate::Float;
 use crate::linalg::Tensor;
 use crate::activation::Module;
-use crate::utils::{AutoGrad, Var, sum_axis_op};
+use crate::autodiff::{AutoGrad, Var, sum_axis_op};
 
 /// Softmax function (normalized exponential function).
 ///
@@ -16,14 +16,15 @@ use crate::utils::{AutoGrad, Var, sum_axis_op};
 ///
 /// # Examples
 /// ```
-/// use tensorrs::activation::{Function, SoftMax};
+/// use tensorrs::activation::{Module, SoftMax};
 /// use tensorrs::linalg::Matrix;
-/// use tensorrs::matrix;
+/// use tensorrs::tensor;
+/// use tensorrs::autodiff::{AutoGrad, Var, VarRef};
 ///
 /// let softmax = SoftMax::new();
-/// let input = matrix![[1.0, 2.0, 3.0]];
-/// let output = softmax.forward(input);
-/// println!("Softmax output: {}", output);
+/// let input = tensor![[1.0, 2.0, 3.0]];
+/// let output = softmax.forward(&Var::leaf(input, false));
+/// println!("Softmax output: {}", output.value());
 /// //[{0.09003057 0.24472848 0.66524094},
 /// // {0.090030566 0.24472846 0.66524094}]
 /// ```
@@ -39,7 +40,7 @@ impl SoftMax {
 }
 
 impl<T: Float> Module<T> for SoftMax {
-    fn forward(&self, x: &crate::utils::VarRef<T>) -> crate::utils::VarRef<T> {
+    fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
         let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
         let e = Var::leaf(Tensor::scalar(e_val), false);
         let exp_x = &e ^ x;
@@ -54,7 +55,7 @@ impl<T: Float> Module<T> for SoftMax {
         &exp_x / &sum_exp    
     }
 
-    fn parameters(&self) -> Vec<crate::utils::VarRef<T>> {
+    fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {
         vec![]
     }
 }
@@ -64,7 +65,7 @@ impl<T: Float> Module<T> for SoftMax {
 mod tests {
     use super::*;
     use crate::activation::*;
-    use crate::utils::Var;
+    use crate::autodiff::Var;
     use crate::tensor; // Предполагаю, у тебя есть макрос для создания тензоров
 
     // Вспомогательная функция для проверки близости значений
@@ -131,7 +132,7 @@ mod tests {
     #[test]
     fn test_selu_scaling() {
         let x = Var::leaf(tensor![[1.0]], true);
-        let selu = SELU::new(0.0); // Параметры подтянутся из трейта Float
+        let selu = SELU::new(); // Параметры подтянутся из трейта Float
         let out = selu.forward(&x);
         
         // Для x > 0: lambda * x

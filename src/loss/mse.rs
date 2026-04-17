@@ -1,4 +1,4 @@
-use crate::{Float, utils::VarRef};
+use crate::{Float, autodiff::VarRef};
 
 pub fn mse<T:Float>(y: &VarRef<T>, y_pred: &VarRef<T>) -> VarRef<T> {
     let diff = y - y_pred;

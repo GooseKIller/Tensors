@@ -7,7 +7,7 @@ use std::{ops::{
     Add, AddAssign, BitAnd, BitAndAssign, Mul, MulAssign, Sub, SubAssign
 }, sync::Arc};
 
-fn broadcast_shape(a: &[usize], b: &[usize]) -> Option<Vec<usize>> {
+pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Option<Vec<usize>> {
     let ndim = a.len().max(b.len());
     let mut out = Vec::with_capacity(ndim);
 

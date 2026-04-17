@@ -1,4 +1,4 @@
-use crate::{Float, linalg::Tensor, optim::Optimizer, utils::{AutoGrad, VarRef}};
+use crate::{Float, linalg::Tensor, optim::Optimizer, autodiff::{AutoGrad, VarRef}};
 
 pub struct Adam<T:Float> {
     params: Vec<VarRef<T>>,
@@ -67,6 +67,10 @@ impl<T: Float> Optimizer<T> for Adam<T> {
         for param in &self.params {
             param.zero_grad();
         }
+    }
+    
+    fn params(&self) -> Vec<crate::autodiff::VarRef<T>> {
+        self.params.clone()
     }
 }
 

@@ -29,51 +29,56 @@ tensorrs = "0.3.3"
 
 ## Example Usage
 ```rust
-use tensorrs::activation::{Function, Sigmoid};
-use tensorrs::{DataType, matrix};
-use tensorrs::linalg::Matrix;
-use tensorrs::loss::SSE;
-use tensorrs::nn::{Linear, Sequential};
-use tensorrs::optim::Adam;
+use tensorrs::{
+    activation::{Module, Sigmoid}, 
+    loss::binary_cross_entropy, 
+    nn::{Linear, Sequential}, 
+    optim::{Adam, Optimizer}, 
+    tensor, 
+    utils::{AutoGrad, Var}
+};
 // simple xor gate realization
 fn main() {
-    //input data
-    let input = matrix![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
-    //output data
-    let output = matrix![[0.0], [1.0], [1.0], [0.0]];
+    let x_val = tensor![[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
+    let y_val = tensor![[0.0], [1.0], [1.0], [0.0]];
 
-    // architecture of neural network
-    let layers: VecSeq<f32> = vec![
-        Box::new(Linear::new(2, 2, true)),
+    let x = Var::leaf(x_val, true);
+    let y = Var::leaf(y_val, true);
+
+    // 2. Define the model architecture using the Sequential container
+    // This stacks layers where the output of one flows into the next
+    let model = Sequential::new(vec![
+        Box::new(Linear::<f32>::new(2, 4, true)),
         Box::new(Sigmoid::new()),
-        Box::new(Linear::new(2, 1, true)),
-        Box::new(Sigmoid::new())
-    ];
+        Box::new(Linear::new(4, 1, true)),
+        Box::new(Sigmoid::new()),
+    ]);
 
-    let mut optim = Adam::new(0.02f32, &layers);
-    let mut model = Sequential::new(layers);
-    let loss = SSE::new(DataType::f32());
-    let mut loss_num = 100f32;
+    let mut optim = Adam::new(model.parameters(), 0.1);
+    for i in 0..1000 {
+        optim.zero_grad();
 
-    println!("Initial output: {}", model.forward(input.clone()));
+        let y_pred = model.forward(&x);
+        let loss = binary_cross_entropy(&y_pred, &y);
 
-    for i in 0..10000 {
-        if loss_num < 0.001 {
-            println!("i: {} LOSS: {}", i, loss_num);
-            break;
+        loss.backward();
+
+        optim.step();
+
+        if i % 100 == 0{
+            println!("{i}: {}", y_pred.value());
+            println!("{i}: {}", loss.value());
         }
-        loss_num = model.train(
-            input.clone(),
-            output.clone(),
-            &mut optim,
-            &loss
-        );
-        if i % 1000 == 0 {
-            println!("Loss at iteration {}: {}", i, loss_num);
+
+        if loss.value().item() < 0.01 {
+            println!("Early exit");
+            println!("{i}: {}", y_pred.value());
+            println!("{i}: {}", loss.value());
+            break;
         }
     }
 
-    println!("Final output: {}", model.forward(input));
+    println!("Final output: {}", model.forward(&x));
 }
 ```
 

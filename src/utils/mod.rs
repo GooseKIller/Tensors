@@ -1,9 +1,9 @@
 use crate::linalg::Vector;
 use crate::Float;
 
-mod autodiff;
+mod clip_grad;
 
-pub use autodiff::*;
+pub use clip_grad::*;
 
 /// Performs one-hot encoding on a vector of categorical indices.
 ///
