@@ -16,7 +16,7 @@ fn main() {
     for i in 0..300 {
         optim.zero_grad();
         let output = model.forward(&x);
-        let loss = mse(&y, &output);
+        let loss = mse(&output, &y);
 
         let value = loss.value().item();
         if value.is_nan() || value < 0.01 {

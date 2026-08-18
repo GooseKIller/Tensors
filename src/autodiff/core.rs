@@ -118,6 +118,8 @@ pub(crate) enum OpKind<T: Float> {
     MatMul(VarRef<T>, VarRef<T>),
     SumAxis(VarRef<T>, usize, bool),
     Log(VarRef<T>),
+    Abs(VarRef<T>),
+    Clamp(VarRef<T>, T, T),
 }
 
 impl<T:Float> OpKind<T> {
@@ -133,6 +135,8 @@ impl<T:Float> OpKind<T> {
             OpKind::MatMul(a, b) => vec![a.clone(), b.clone()],
             OpKind::SumAxis(a, _, _) => vec![a.clone()],
             OpKind::Log(a) => vec![a.clone()],
+            OpKind::Abs(a) => vec![a.clone()],
+            OpKind::Clamp(a, _, _) => vec![a.clone()],
         }
     }
 
@@ -294,6 +298,22 @@ impl<T:Float> OpKind<T> {
             OpKind::Log(a) => {
                 // d(ln(x))/dx = 1/x
                 let ga = out_grad / &a.borrow().value;
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Abs(a) => {
+                // d|x|/dx = sign(x), and 0 at x = 0
+                let sign = a.borrow().value.map(|x| x.sign());
+                let ga = out_grad & &sign;
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Clamp(a, min, max) => {
+                // the gradient passes through untouched inside the range and is
+                // cut off outside of it, where the output no longer follows x
+                let (min, max) = (*min, *max);
+                let mask = a.borrow().value.map(|x| {
+                    if x < min || x > max { T::default() } else { T::one() }
+                });
+                let ga = out_grad & &mask;
                 vec![(a.clone(), ga)]
             }
 

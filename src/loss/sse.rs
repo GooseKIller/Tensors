@@ -1,26 +1,39 @@
 use crate::Float;
 use crate::autodiff::VarRef;
 
-/// Sum of Squared Errors (SSE) loss function.
+/// Sum of squared errors
 ///
-/// The `SSE` loss function computes the sum of the squared differences between
-/// the predicted values and the target values. It is commonly used in regression tasks.
+/// # Formula
+///```math
+///  SSE(\hat{y}, y) = \sum_{i=1}^{n} (\hat{y}_i - y_i)^2
+///```
+/// Where $`\hat{y}_i`$ predicted and $`y_i`$ expected value
 ///
-/// # Mathematical Definition
-/// For predicted values `y_pred` and target values `y_true`, the SSE is defined as:
+/// # Example
+/// ```
+/// use tensorrs::{tensor, loss::sse, autodiff::{AutoGrad, Var}};
 ///
-/// SSE = \sum_{i=1}^n (y_{true, i} - y_{pred, i})^2
+/// let y_pred = Var::leaf(tensor![[2.0f32], [4.0]], false);
+/// let y      = Var::leaf(tensor![[1.0f32], [2.0]], false);
 ///
-/// # Type Constraints
-/// - `T: Float`: The loss function works only with floating-point types (e.g., `f32`, `f64`).
+/// let loss = sse(&y_pred, &y);
+/// assert_eq!(loss.value().item(), 5.0); // 1 + 4
+/// ```
+///
+/// # Arguments
+/// * `y_pred` — the predicted values.
+/// * `y` — the expected values, of the same shape.
+///
+/// # Returns
+/// A scalar node of the autodiff graph.
+///
 /// # Notes
-/// - The `datatype_number` parameter in `new` is a placeholder and is not used in the computation.
-///   It is included to ensure type consistency with other loss functions.
-/// - SSE is sensitive to outliers due to the squaring of errors.
+/// Unlike [mse](crate::loss::mse) the result is not divided by the batch size, so
+/// it grows with the number of samples. Squaring makes it sensitive to outliers.
 ///
 /// # See Also
-/// - [Wikipedia: Mean squared error](https://en.wikipedia.org/wiki/Mean_squared_error)
-pub fn sse<T:Float>(y: &VarRef<T>, y_pred: &VarRef<T>) -> VarRef<T> {
-    let diff = y - y_pred;
-    (&(&diff ^ T::from_usize(2)) ^ T::from_f64(0.5)).sum()
+/// [Wikipedia: Mean squared error](https://en.wikipedia.org/wiki/Mean_squared_error)
+pub fn sse<T:Float>(y_pred: &VarRef<T>, y: &VarRef<T>) -> VarRef<T> {
+    let diff = y_pred - y;
+    (&diff ^ T::from_usize(2)).sum()
 }

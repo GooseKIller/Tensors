@@ -174,3 +174,86 @@ pub fn log_op<T:Float>(a: &VarRef<T>) -> VarRef<T> {
         cached_topo: RefCell::new(None),
     })))
 }
+
+/// Element-wise absolute value.
+///
+/// # Formula
+///```math
+///  f(x) = |x| \qquad \frac{\partial f}{\partial x} = \operatorname{sign}(x)
+///```
+///
+/// # Example
+/// ```
+/// use tensorrs::{tensor, autodiff::{AutoGrad, Var, abs_op}};
+///
+/// let x = Var::leaf(tensor![-2.0f32, 0.0, 3.0], true);
+/// let y = abs_op(&x);
+/// assert_eq!(y.value().get_data(), vec![2.0, 0.0, 3.0]);
+///
+/// y.sum().backward();
+/// assert_eq!(x.grad().get_data(), vec![-1.0, 0.0, 1.0]);
+/// ```
+///
+/// # Notes
+/// The derivative is taken as `0` at `x = 0`, where `|x|` has no real one.
+pub fn abs_op<T: Float>(a: &VarRef<T>) -> VarRef<T> {
+    let va = a.borrow().value.shallow_copy();
+    let out_value = va.map(|x| x.abs());
+
+    let shape = out_value.get_shape();
+    let out_zero = Tensor::from_num(T::default(), shape);
+
+    VarRef(Rc::new(RefCell::new(Var {
+        value: out_value,
+        grad: RefCell::new(out_zero),
+        op: OpKind::Abs(a.clone()),
+        requires_grad: a.borrow().requires_grad,
+        cached_topo: RefCell::new(None),
+    })))
+}
+
+/// Element-wise clamp into `[min, max]`.
+///
+/// # Formula
+///```math
+///  f(x) = \min(\max(x, a), b) \qquad
+///  \frac{\partial f}{\partial x} = \begin{cases} 1, & a \le x \le b \\ 0, & \text{otherwise} \end{cases}
+///```
+///
+/// # Example
+/// ```
+/// use tensorrs::{tensor, autodiff::{AutoGrad, Var, clamp_op}};
+///
+/// let x = Var::leaf(tensor![-1.0f32, 0.5, 4.0], true);
+/// let y = clamp_op(&x, 0.0, 1.0);
+/// assert_eq!(y.value().get_data(), vec![0.0, 0.5, 1.0]);
+///
+/// // only the value that was left alone keeps its gradient
+/// y.sum().backward();
+/// assert_eq!(x.grad().get_data(), vec![0.0, 1.0, 0.0]);
+/// ```
+///
+/// # Arguments
+/// * `a` — the node to clamp.
+/// * `min` — the lower bound.
+/// * `max` — the upper bound.
+///
+/// # Notes
+/// Values pushed to a bound stop receiving a gradient, since the output no longer
+/// follows the input there. That is what keeps a saturated probability from
+/// blowing up the logarithm in [cross_entropy](crate::loss::cross_entropy).
+pub fn clamp_op<T: Float>(a: &VarRef<T>, min: T, max: T) -> VarRef<T> {
+    let va = a.borrow().value.shallow_copy();
+    let out_value = va.map(|x| if x < min { min } else if x > max { max } else { x });
+
+    let shape = out_value.get_shape();
+    let out_zero = Tensor::from_num(T::default(), shape);
+
+    VarRef(Rc::new(RefCell::new(Var {
+        value: out_value,
+        grad: RefCell::new(out_zero),
+        op: OpKind::Clamp(a.clone(), min, max),
+        requires_grad: a.borrow().requires_grad,
+        cached_topo: RefCell::new(None),
+    })))
+}

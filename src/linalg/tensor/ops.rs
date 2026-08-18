@@ -310,53 +310,6 @@ impl<T: Num> AddAssign<&Tensor<T>> for Tensor<T> {
         self.offset = result.offset;
     }
 }
-/*
-impl<T: Num + Send + Sync> Tensor<T> {
-    pub fn add(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T> {
-        let shape = broadcast_shape(&a.shape, &b.shape)
-            .expect("add: incompatible shapes");
-
-        let a_view = a.broadcast_to(&shape)
-            .expect("broadcast_to failed (BUG)");
-        let b_view = b.broadcast_to(&shape)
-            .expect("broadcast_to failed (BUG)");
-
-        // ---------- fast-path inplace ----------
-        if a_view.can_inplace() && a_view.shape == shape {
-            let mut out = a_view.clone(); // shallow clone, Arc strong_count == 1
-            let a_idx = out.storage_indices();
-            let b_idx = b_view.storage_indices();
-
-            let storage = Arc::make_mut(&mut out.storage);
-            let data = &mut storage.data;
-
-            a_idx
-                .par_iter()
-                .zip(b_idx.par_iter())
-                .for_each(|(&ia, &ib)| {
-                    data[ia] += b_view.storage.data[ib];
-                });
-
-            return out;
-        }
-
-        // ---------- fallback: materialize ----------
-        let a_idx = a_view.storage_indices();
-        let b_idx = b_view.storage_indices();
-
-        let mut out = Vec::with_capacity(product(&shape));
-        let a_data = &a_view.storage.data;
-        let b_data = &b_view.storage.data;
-
-        for (&ia, &ib) in a_idx.iter().zip(b_idx.iter()) {
-            out.push(a_data[ia] + b_data[ib]);
-        }
-
-        Tensor::new(out, shape)
-    }
-}
-
-*/
 
 // 
 // Sub

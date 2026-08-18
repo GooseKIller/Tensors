@@ -31,7 +31,7 @@
 //! for i in 0..1000 {
 //!     optim.zero_grad();
 //!     let output = model.forward(&x);
-//!     let loss = mse(&y, &output);
+//!     let loss = mse(&output, &y);
 //! 
 //!     loss.backward();
 //!     if i % 100 == 0 {
@@ -289,7 +289,7 @@ mod test {
         for i in 0..1000 {
             optim.zero_grad();
             let output = model.forward(&x);
-            let loss = mse(&y, &output);
+            let loss = mse(&output, &y);
 
             loss.backward();
             if i % 100 == 0 {

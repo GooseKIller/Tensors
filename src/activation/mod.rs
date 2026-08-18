@@ -2,19 +2,24 @@
 //!
 //! functions for adding non-linearity to a neural network
 //!
-//! They all have call and derivative methods.
+//! They all implement [Module], so they can be stacked into a
+//! [Sequential](crate::nn::Sequential) model exactly like any other layer.
 //!
 //!1.[ELU]
 //!
 //!2.[LeakyReLU]
 //!
-//!3.[ReLU]
+//!3.[PReLU]
 //!
-//!4.[SELU]
+//!4.[ReLU]
 //!
-//!5.[Sigmoid]
+//!5.[SELU]
 //!
-//!6.[SoftMax]
+//!6.[Sigmoid]
+//!
+//!7.[SoftMax]
+//!
+//!8.[Tanh]
 
 mod elu;
 mod leaky_relu;
@@ -42,10 +47,71 @@ use crate::Float;
 use crate::autodiff::{AutoGrad, VarRef};
 
 
+/// Anything that can take part in a forward pass: a layer, an activation
+/// function, or a whole model.
+///
+/// # Example
+/// ```
+/// use tensorrs::{tensor, Float, activation::Module,
+///                autodiff::{AutoGrad, Var, VarRef}};
+///
+/// // A layer without parameters only has to define `forward` and `parameters`
+/// struct Double;
+///
+/// impl<T: Float> Module<T> for Double {
+///     fn forward(&self, x: &VarRef<T>) -> VarRef<T> {
+///         x + x
+///     }
+///     fn parameters(&self) -> Vec<VarRef<T>> {
+///         vec![]
+///     }
+/// }
+///
+/// let x = Var::leaf(tensor![[1.0f32, 2.0]], false);
+/// assert_eq!(Double.forward(&x).value().get_data(), vec![2.0, 4.0]);
+/// ```
+///
+/// # Notes
+/// Only [Module::forward] and [Module::parameters] have to be implemented — saving,
+/// loading and freezing are all derived from `parameters()`.
 pub trait Module<T: Float> {
+    /// Runs the input through this module and returns the output node.
+    ///
+    /// # Arguments
+    /// * `x` — the input node of the autodiff graph.
+    ///
+    /// # Returns
+    /// The output node. The operations performed here are recorded in the graph,
+    /// so `backward()` can walk them in reverse.
     fn forward(&self, x: &VarRef<T>) -> VarRef<T>;
+
+    /// Returns the trainable parameters of this module.
+    ///
+    /// # Returns
+    /// An empty vector for modules without parameters, such as most activation
+    /// functions. The order has to stay stable — [Module::save] and [Module::load]
+    /// rely on it.
     fn parameters(&self) -> Vec<VarRef<T>>;
 
+    /// Writes every parameter to `path` as raw little-endian `f32`.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use tensorrs::{activation::Module, nn::{Linear, Sequential}};
+    ///
+    /// let model: Sequential<f32> = Sequential::new(vec![
+    ///     Box::new(Linear::new(2, 1, true)),
+    /// ]);
+    /// model.save("model.bin").unwrap();
+    /// ```
+    ///
+    /// # Arguments
+    /// * `path` — the file to write to; it is created or truncated.
+    ///
+    /// # Notes
+    /// Only the numbers are stored, not the architecture, so loading them back
+    /// requires a model built exactly the same way. Values are always narrowed to
+    /// `f32`, so an `f64` model loses precision on a round trip.
     fn save(&self, path: &str) -> std::io::Result<()> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
@@ -62,6 +128,19 @@ pub trait Module<T: Float> {
         Ok(())
     }
 
+    /// Reads the parameters back from a file written by [Module::save].
+    ///
+    /// # Arguments
+    /// * `path` — the file to read from.
+    ///
+    /// # Returns
+    /// An error if the file cannot be read, or if a parameter tensor shares its
+    /// storage with another tensor and therefore cannot be mutated safely.
+    ///
+    /// # Notes
+    /// Call it before training starts or after it finishes: the parameters are
+    /// overwritten in place, and that shared-storage check is the only guard
+    /// against another part of the graph observing a half-written tensor.
     fn load(&mut self, path: &str) -> std::io::Result<()> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
@@ -104,71 +183,25 @@ pub trait Module<T: Float> {
         Ok(())
     }
 
+    /// Freezes the module: its parameters stop collecting gradients.
+    ///
+    /// # Notes
+    /// Useful for fine-tuning, where only the last layers are trained. Undo it
+    /// with [Module::grad].
     fn no_grad(&mut self) {
         for i in self.parameters() {
             i.borrow_mut().requires_grad = false;
         }
     }
 
+    /// Unfreezes the module: its parameters collect gradients again.
+    ///
+    /// # Notes
+    /// The counterpart of [Module::no_grad]. Parameters are created unfrozen, so
+    /// this is only needed after a [Module::no_grad] call.
     fn grad(&mut self) {
         for i in self.parameters() {
             i.borrow_mut().requires_grad = true;
         }
     }
 }
-/*
-/// A trait for activation functions and other operations that can be applied to matrices.
-///
-/// This trait is implemented by all activation functions in the Tensors library.
-/// It provides a common interface for applying functions to matrices and computing
-/// their gradients during backpropagation.
-pub trait Function<T: Float>: Any {
-    fn name(&self) -> String;
-
-    /// Applies the function to the input matrix.
-    ///
-    /// This method is the primary way to use a function (e.g., activation function, layer)
-    /// in the Tensors library. It takes an input matrix, applies the function to each element,
-    /// and returns the resulting matrix.
-    ///
-    /// # Arguments
-    /// * `matrix` - The input matrix to which the function will be applied.
-    ///
-    /// # Returns
-    /// A new matrix with the function applied to matrix.
-    ///
-    /// # Notes
-    /// - In Python, you might be familiar with the `__call__` method, which allows an object
-    ///   to be called like a function (e.g., `sigmoid(input)`). Rust does not have a direct
-    ///   equivalent, so we use the `call` method instead.
-    /// - If you prefer a more concise syntax, consider implementing the `Function` trait,
-    ///   which provides a `forward` method that can be used similarly.
-    fn call(&self, matrix: Matrix<T>) -> Matrix<T>;
-
-    /// Derivative for Function
-    ///
-    /// ## Arguments
-    ///
-    /// * `matrix` - the input matrix to which the derivative will be applied
-    fn derivative(&self, matrix: Matrix<T>) -> Matrix<T>;
-
-    fn is_linear(&self) -> bool {
-        false
-    }
-
-    fn get_data(&self) -> Option<Matrix<T>> {
-        None
-    }
-
-    fn set_data(&mut self, _data: Matrix<T>) {}
-
-    fn get_weights(&self) -> Option<Matrix<T>> {
-        None
-    }
-
-    fn get_bias(&self) -> Option<Matrix<T>> {
-        None
-    }
-    fn is_bias(&self) -> bool {false}
-}
-*/
