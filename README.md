@@ -52,7 +52,7 @@ Add `tensorrs` to your project from [crates.io](https://crates.io/crates/tensorr
 
 ```toml
 [dependencies]
-tensorrs = "0.4.0"
+tensorrs = "0.4.1"
 ```
 
 ## Example Usage

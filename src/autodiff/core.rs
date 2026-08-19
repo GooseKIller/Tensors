@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::{Rc, Weak}};
 use crate::{Float, linalg::Tensor};
 
 pub struct Var<T: Float> {
@@ -6,7 +6,14 @@ pub struct Var<T: Float> {
     pub grad: RefCell<Tensor<T>>,
     pub(crate) op: OpKind<T>,
     pub requires_grad: bool,
-    pub(crate) cached_topo: RefCell<Option<Vec<VarRef<T>>>>,
+    /// The topological order, remembered between `zero_grad` and `backward`.
+    ///
+    /// Weak, not strong: the order includes the node itself, so owning it would
+    /// make the node keep itself alive - a cycle `Rc` can never collect, leaking
+    /// the whole graph on every backward pass. The graph is already held by the
+    /// chain of parents for as long as the root lives, so the cache has nothing
+    /// to own.
+    pub(crate) cached_topo: RefCell<Option<Vec<Weak<RefCell<Var<T>>>>>>,
 }
 
 #[derive(Clone)]

@@ -1,6 +1,6 @@
 [package]
 name = "tensorrs"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Anton Krop antonjobonly@gmail.com"]
 edition = "2021"
 description = "A lightweight machine learning library with autodiff, tensors and neural network layers"

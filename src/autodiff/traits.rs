@@ -1,4 +1,5 @@
 use std::ops::Add;
+use std::rc::Rc;
 
 use crate::{Float, autodiff::core::{VarRef, build_topo}, linalg::Tensor};
 
@@ -10,6 +11,28 @@ pub trait AutoGrad {
     fn grad(&self) -> Tensor<Self::Elem>;
     fn zero_grad(&self);
     fn backward(&self);
+}
+
+impl<T: Float> VarRef<T> {
+    /// Returns the remembered topological order, or `None` if it was never built
+    /// or any of its nodes has since been dropped.
+    fn cached_topo(&self) -> Option<Vec<VarRef<T>>> {
+        self.0
+            .borrow()
+            .cached_topo
+            .borrow()
+            .as_ref()?
+            .iter()
+            .map(|weak| weak.upgrade().map(VarRef))
+            .collect()
+    }
+
+    /// Remembers a topological order without taking ownership of it.
+    fn remember_topo(&self, topo: &[VarRef<T>]) {
+        let weak = topo.iter().map(|node| Rc::downgrade(&node.0)).collect();
+        *self.0.borrow_mut().cached_topo.borrow_mut() = Some(weak);
+    }
+
 }
 
 /// The implementation for VarRef
@@ -31,13 +54,11 @@ impl<T: Float> AutoGrad for VarRef<T> {
 
     fn zero_grad(&self) {
         // Cached: reuse the topology from backward, or build it
-        let topo = self.0.borrow().cached_topo.borrow().clone();
-        
-        let topo = match topo {
+        let topo = match self.cached_topo() {
             Some(t) => t,
             None => {
                 let t = build_topo(self);
-                *self.0.borrow_mut().cached_topo.borrow_mut() = Some(t.clone());
+                self.remember_topo(&t);
                 t
             }
         };
@@ -51,13 +72,11 @@ impl<T: Float> AutoGrad for VarRef<T> {
 
     fn backward(&self) {
         // Cached: the first call builds it, later ones reuse it
-        let topo = self.0.borrow().cached_topo.borrow().clone();
-        
-        let topo = match topo {
+        let topo = match self.cached_topo() {
             Some(t) => t,
             None => {
                 let t = build_topo(self);
-                *self.0.borrow_mut().cached_topo.borrow_mut() = Some(t.clone());
+                self.remember_topo(&t);
                 t
             }
         };
@@ -171,5 +190,76 @@ mod tests {
         out.sum().backward(); // must not panic
 
         assert_eq!(a.grad().get_data(), vec![0.0, 0.0]);
+    }
+}
+
+
+#[cfg(test)]
+mod graph_lifetime {
+    use super::*;
+    use crate::autodiff::Var;
+    use crate::linalg::Tensor;
+    use std::rc::Rc;
+
+    /// The graph has to go away with its root, or every training step leaks it.
+    #[test]
+    fn the_graph_is_freed_once_its_root_is_dropped() {
+        let leaf = Var::leaf(Tensor::new(vec![1.0f32, 2.0], vec![2]), true);
+
+        let root_weak = {
+            let doubled = &leaf + &leaf;
+            let squared = &doubled & &doubled;
+            let root = squared.sum();
+
+            let weak = Rc::downgrade(&root.0);
+            root.zero_grad();
+            root.backward();
+
+            // one reference from `root` itself and nothing else: the cache
+            // remembers the order weakly, so the node does not hold itself
+            assert_eq!(Rc::strong_count(&root.0), 1,
+                "the root holds an extra reference to itself");
+
+            weak
+        };
+
+        assert!(root_weak.upgrade().is_none(),
+            "the root outlived its scope - the graph is leaking");
+    }
+
+    /// The remembered order still works when the graph is alive.
+    #[test]
+    fn a_second_backward_reuses_the_order() {
+        let leaf = Var::leaf(Tensor::new(vec![3.0f32], vec![1]), true);
+        let root = (&leaf + &leaf).sum();
+
+        root.backward();
+        let first = leaf.grad().get_data();
+
+        root.zero_grad();
+        root.backward();
+        let second = leaf.grad().get_data();
+
+        assert_eq!(first, second, "the cached order gave a different gradient");
+    }
+
+    /// A leaf shared by two graphs is freed when both of them are.
+    #[test]
+    fn a_shared_leaf_survives_exactly_as_long_as_its_graphs() {
+        let leaf = Var::leaf(Tensor::new(vec![1.0f32, 2.0], vec![2]), true);
+        let leaf_weak = Rc::downgrade(&leaf.0);
+
+        {
+            let first = (&leaf + &leaf).sum();
+            let second = (&leaf & &leaf).sum();
+            first.backward();
+            second.backward();
+        }
+
+        // the graphs are gone, the leaf is still held here
+        assert!(leaf_weak.upgrade().is_some());
+
+        drop(leaf);
+        assert!(leaf_weak.upgrade().is_none(), "the leaf outlived every owner");
     }
 }

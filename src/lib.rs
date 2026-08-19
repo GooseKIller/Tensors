@@ -45,6 +45,9 @@
 //! Thanks for using Tensors!!!
 
 #![doc(html_logo_url = "https://raw.githubusercontent.com/GooseKIller/Tensors/main/assets/tensorsLogo.svg")]
+// The whole library is safe Rust. Weight loading used to reach for a raw pointer;
+// it goes through Arc::make_mut now, like every other in-place tensor operation.
+#![forbid(unsafe_code)]
 use std::cmp::PartialOrd;
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
@@ -304,5 +307,101 @@ mod test {
 
             optim.step();
         }
+    }
+}
+
+#[cfg(test)]
+mod leak_audit {
+    use crate::activation::*;
+    use crate::autodiff::core::build_topo;
+    use crate::autodiff::*;
+    use crate::linalg::Tensor;
+    use crate::nn::*;
+    use std::rc::{Rc, Weak};
+
+    /// Builds a graph, notes a weak reference to every one of its nodes, drops
+    /// the root and reports how many nodes outlived it.
+    fn survivors<F>(build: F) -> usize
+    where
+        F: FnOnce() -> VarRef<f32>,
+    {
+        let weaks: Vec<Weak<_>> = {
+            let root = build();
+            root.zero_grad();
+            root.backward();
+
+            build_topo(&root).iter().map(|n| Rc::downgrade(&n.0)).collect()
+        };
+
+        weaks.iter().filter(|w| w.upgrade().is_some()).count()
+    }
+
+    fn image() -> VarRef<f32> {
+        Var::leaf(Tensor::<f32>::randn(vec![2, 3, 8, 8]), false)
+    }
+    fn sequence() -> VarRef<f32> {
+        Var::leaf(Tensor::<f32>::randn(vec![2, 4, 16]), false)
+    }
+    fn rows() -> VarRef<f32> {
+        Var::leaf(Tensor::<f32>::randn(vec![4, 6]), false)
+    }
+
+    /// Every intermediate node has to die with the graph. The only nodes allowed
+    /// to outlive it are the parameters, which the layer itself owns - they have
+    /// to survive, or there would be nothing left to train.
+    #[test]
+    fn a_graph_leaves_nothing_but_parameters_behind() {
+        macro_rules! check {
+            ($name:expr, $layer:expr, $input:expr) => {{
+                let layer = $layer;
+                let expected = Module::<f32>::parameters(&layer).len();
+                let alive = survivors(|| Module::<f32>::forward(&layer, $input).sum());
+                assert_eq!(alive, expected,
+                    "{}: {alive} nodes outlived the graph, expected only its {expected} parameters",
+                    $name);
+            }};
+        }
+
+        check!("Linear", Linear::<f32>::new(6, 3, true), &rows());
+        check!("Conv2d", Conv2d::<f32>::same(3, 4, (3, 3), true), &image());
+        check!("MaxPool2d", MaxPool2d::new((2, 2)), &image());
+        check!("AvgPool2d", AvgPool2d::new((2, 2)), &image());
+        check!("Flatten", Flatten::new(), &image());
+        check!("LayerNorm", LayerNorm::<f32>::new(16, 1e-5), &sequence());
+        check!("Dropout", Dropout::new(0.5), &rows());
+        check!("RNN", RNN::<f32>::new(16, 8, true), &sequence());
+        check!("MultiHeadAttention", MultiHeadAttention::<f32>::new(16, 2, true), &sequence());
+        check!("Sigmoid", Sigmoid::new(), &rows());
+        check!("Tanh", Tanh::new(), &rows());
+        check!("SoftMax", SoftMax::new(), &rows());
+        check!("ReLU", ReLU::new(), &rows());
+        check!("PReLU", PReLU::<f32>::new(), &rows());
+        check!("ELU", ELU::new(1.0f32), &rows());
+        check!("SELU", SELU::new(), &rows());
+
+        // Embedding takes ids rather than a node, so it does not fit the macro
+        let embedding = Embedding::<f32>::new(10, 4);
+        let alive = survivors(|| embedding.forward(&[vec![1, 2], vec![3, 4]]).sum());
+        assert_eq!(alive, embedding.parameters().len(),
+            "Embedding: {alive} nodes outlived the graph");
+    }
+
+    /// A whole model, not just one layer at a time.
+    #[test]
+    fn a_stacked_model_leaves_nothing_behind() {
+        let model: Sequential<f32> = Sequential::new(vec![
+            Box::new(Conv2d::same(3, 4, (3, 3), true)),
+            Box::new(ReLU::new()),
+            Box::new(MaxPool2d::new((2, 2))),
+            Box::new(Flatten::new()),
+            Box::new(Linear::new(4 * 4 * 4, 8, true)),
+            Box::new(ReLU::new()),
+            Box::new(Linear::new(8, 3, true)),
+            Box::new(SoftMax::new()),
+        ]);
+
+        let alive = survivors(|| model.forward(&image()).sum());
+        assert_eq!(alive, model.parameters().len(),
+            "{alive} nodes outlived a stacked model, expected only its parameters");
     }
 }

@@ -147,38 +147,18 @@ pub trait Module<T: Float> {
         let mut buffer = [0u8; 4];
 
         for param in self.parameters() {
-            let var = param.borrow();
+            let mut var = param.borrow_mut();
 
-            if Arc::strong_count(&var.value.storage) > 1 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!(
-                        "Safety violation: tensor has {} owners. Cannot mutate safely.", 
-                        Arc::strong_count(&var.value.storage)
-                    )
-                ));
-            }
+            // Copy-on-write: if anything else still holds this buffer it is
+            // cloned first, so the parameter gets its own to write into. This is
+            // the same path the in-place tensor operations take.
+            let storage = Arc::make_mut(&mut var.value.storage);
 
-            let data_ptr = var.value.storage.data.as_ptr() as *mut T;
-            let len = var.value.storage.data.len();
-
-            // SAFETY: 
-            // 1. We are performing a single-threaded weight loading before the 
-            //    training loop starts or after it finishes.
-            // 2. The memory pointed to by `data_ptr` is owned by an Arc within 
-            //    the Storage struct and is guaranteed to be valid for the duration 
-            //    of this function (the Arc is not dropped).
-            // 3. We ensure that we do not create multiple mutable references 
-            //    to the same data simultaneously across different threads.
-            unsafe {
-                let data_slice = std::slice::from_raw_parts_mut(data_ptr, len);
-                
-                for val in data_slice.iter_mut() {
-                    reader.read_exact(&mut buffer)?;
-                    *val = T::from_f32(f32::from_le_bytes(buffer));
+            for val in storage.data.iter_mut() {
+                reader.read_exact(&mut buffer)?;
+                *val = T::from_f32(f32::from_le_bytes(buffer));
             }
         }
-    }
 
         Ok(())
     }
@@ -306,5 +286,60 @@ mod tests {
             assert!((x.grad().get_data()[0] - s * (1.0 - s)).abs() < 1e-12,
                 "sigmoid' at {value}");
         }
+    }
+}
+
+#[cfg(test)]
+mod save_load_tests {
+    use super::*;
+    use crate::nn::Linear;
+
+    fn temp_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(name)
+    }
+
+    #[test]
+    fn weights_survive_a_round_trip() {
+        let path = temp_path("tensorrs_round_trip.bin");
+
+        let saved = Linear::<f32>::new(3, 2, true);
+        let before: Vec<Vec<f32>> = saved.parameters().iter().map(|p| p.value().get_data()).collect();
+        saved.save(path.to_str().unwrap()).unwrap();
+
+        let mut loaded = Linear::<f32>::new(3, 2, true);
+        // a freshly built layer starts somewhere else entirely
+        assert_ne!(loaded.parameters()[0].value().get_data(), before[0]);
+
+        loaded.load(path.to_str().unwrap()).unwrap();
+
+        let after: Vec<Vec<f32>> = loaded.parameters().iter().map(|p| p.value().get_data()).collect();
+        assert_eq!(after, before, "the weights did not come back the way they went in");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn loading_into_a_shared_buffer_copies_instead_of_failing() {
+        let path = temp_path("tensorrs_shared_buffer.bin");
+
+        let saved = Linear::<f32>::new(3, 2, true);
+        let before = saved.parameters()[0].value().get_data();
+        saved.save(path.to_str().unwrap()).unwrap();
+
+        let mut target = Linear::<f32>::new(3, 2, true);
+
+        // a view sharing the same buffer: this is what the old code refused to
+        // load into, with a "Safety violation" error
+        let alias = target.parameters()[0].value().shallow_copy();
+        let alias_before = alias.get_data();
+
+        target.load(path.to_str().unwrap()).unwrap();
+
+        // the parameter took the saved weights
+        assert_eq!(target.parameters()[0].value().get_data(), before);
+        // and the view kept what it had - copy-on-write, not a shared write
+        assert_eq!(alias.get_data(), alias_before);
+
+        let _ = std::fs::remove_file(&path);
     }
 }
