@@ -188,6 +188,38 @@ pub trait Module<T: Float> {
     /// # Notes
     /// Useful for fine-tuning, where only the last layers are trained. Undo it
     /// with [Module::grad].
+    /// Switches the module into training mode.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::{activation::Module, nn::{Dropout, Linear, Sequential}};
+    ///
+    /// let mut model: Sequential<f32> = Sequential::new(vec![
+    ///     Box::new(Linear::new(4, 4, true)),
+    ///     Box::new(Dropout::new(0.5)),
+    /// ]);
+    ///
+    /// model.eval();  // dropout passes everything through
+    /// model.train(); // and back to dropping
+    /// ```
+    ///
+    /// # Notes
+    /// Only layers that behave differently between training and inference care —
+    /// [Dropout](crate::nn::Dropout) is the one that does. Everything else keeps
+    /// the default, which does nothing. A container such as
+    /// [Sequential](crate::nn::Sequential) passes the call on to its layers.
+    ///
+    /// Modules start in training mode.
+    fn train(&mut self) {}
+
+    /// Switches the module into inference mode.
+    ///
+    /// # Notes
+    /// The counterpart of [Module::train]. Forgetting to call it before measuring
+    /// accuracy is a classic way to get results that look worse than the model is:
+    /// dropout would still be throwing activations away.
+    fn eval(&mut self) {}
+
     fn no_grad(&mut self) {
         for i in self.parameters() {
             i.borrow_mut().requires_grad = false;
@@ -202,6 +234,77 @@ pub trait Module<T: Float> {
     fn grad(&mut self) {
         for i in self.parameters() {
             i.borrow_mut().requires_grad = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        activation::{Module, Sigmoid, Tanh},
+        autodiff::{AutoGrad, Var},
+        tensor,
+    };
+
+    #[test]
+    fn tanh_saturates_instead_of_overflowing() {
+        // written out as (e^x - e^-x) / (e^x + e^-x) this is inf/inf past |x| ~ 88
+        let x = Var::leaf(tensor![[0.0f32, 20.0, 50.0, 90.0, 300.0, -300.0]], true);
+        let y = Tanh::new().forward(&x);
+
+        assert_eq!(y.value().get_data(), vec![0.0, 1.0, 1.0, 1.0, 1.0, -1.0]);
+        assert!(y.value().get_data().iter().all(|v| v.is_finite()));
+
+        y.sum().backward();
+        let grad = x.grad().get_data();
+
+        // a saturated input must get no gradient at all; the old chain through
+        // five nodes reported 1 here
+        assert_eq!(grad[0], 1.0);
+        assert!(grad[1..].iter().all(|&g| g == 0.0), "saturated grads: {grad:?}");
+    }
+
+    #[test]
+    fn sigmoid_stays_finite_on_both_sides() {
+        let x = Var::leaf(tensor![[0.0f32, 100.0, -100.0, 400.0, -400.0]], true);
+        let y = Sigmoid::new().forward(&x);
+
+        // sigmoid(-100) is about 3.7e-44, a subnormal f32 rather than a clean zero
+        let values = y.value().get_data();
+        assert_eq!(values[0], 0.5);
+        assert_eq!(values[1], 1.0);
+        assert!(values[2] < 1e-40 && values[2] >= 0.0, "got {}", values[2]);
+        assert_eq!(values[3], 1.0);
+        assert_eq!(values[4], 0.0);
+
+        y.sum().backward();
+        let grad = x.grad().get_data();
+
+        assert!(grad.iter().all(|g| g.is_finite()), "grads: {grad:?}");
+        assert_eq!(grad[0], 0.25);
+        // saturated inputs get a vanishing gradient rather than a NaN; at -100 it
+        // is a subnormal instead of a clean zero, which is the honest answer
+        assert!(grad[1..].iter().all(|&g| g < 1e-40), "saturated grads: {grad:?}");
+    }
+
+    #[test]
+    fn both_match_their_analytic_derivative() {
+        for value in [-3.0f64, -0.5, 0.0, 0.5, 3.0] {
+            let x = Var::leaf(tensor![[value]], true);
+            let y = Tanh::new().forward(&x);
+            y.backward();
+
+            let expected = 1.0 - value.tanh() * value.tanh();
+            assert!((x.grad().get_data()[0] - expected).abs() < 1e-12,
+                "tanh' at {value}: got {} want {expected}", x.grad().get_data()[0]);
+
+            let x = Var::leaf(tensor![[value]], true);
+            let y = Sigmoid::new().forward(&x);
+            y.backward();
+
+            let s = 1.0 / (1.0 + (-value).exp());
+            assert!((x.grad().get_data()[0] - s * (1.0 - s)).abs() < 1e-12,
+                "sigmoid' at {value}");
         }
     }
 }

@@ -28,7 +28,7 @@ impl<T: Float> Var<T> {
 }
 
 impl<T: Float> VarRef<T> {
-    /// Удобные аксессоры
+    /// Convenient accessors
     pub fn rc(&self) -> &Rc<RefCell<Var<T>>> {
         &self.0
     }
@@ -46,7 +46,7 @@ impl<T: Float> Display for VarRef<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let var = self.0.borrow();
         
-        // 1. Короткое имя операции
+        // 1. A short name for the operation
         let op_name = match &var.op {
             OpKind::Leaf => if var.requires_grad { "Param" } else { "Input" },
             OpKind::Add(_, _) => "Add",
@@ -60,15 +60,15 @@ impl<T: Float> Display for VarRef<T> {
             _ => "Op", 
         };
 
-        // 2. Выводим форму и тип операции
+        // 2. Print the shape and the kind of operation
         write!(f, "Var({} | shape: {:?} | req_grad: {})", 
             op_name, 
             var.value.shape, 
             var.requires_grad
         )?;
 
-        // 3. Если тензор маленький (например, скаляр или 1D до 5 элементов), 
-        // можно сразу напечатать значение через твой Tensor Display
+        // 3. If the tensor is small (a scalar, or 1-D up to 5 elements), the
+        // value itself can be printed through the Tensor Display
         if var.value.get_data().len() <= 25 {
             write!(f, " => {}", var.value)?;
         }
@@ -78,8 +78,8 @@ impl<T: Float> Display for VarRef<T> {
 }
 
 
-/// Построить топологический порядок (list of nodes) начиная с корня.
-/// Возвращаем Vec<VarRef<T>> в порядке обхода (parents сначала, потом node).
+/// Builds the topological order of the nodes, starting from the root.
+/// Returns them in traversal order: the parents first, then the node itself.
 #[allow(dead_code)]
 pub(crate) fn build_topo<T: Float>(root: &VarRef<T>) -> Vec<VarRef<T>> {
     let mut order_rcs: Vec<VarRef<T>> = Vec::new();
@@ -120,6 +120,15 @@ pub(crate) enum OpKind<T: Float> {
     Log(VarRef<T>),
     Abs(VarRef<T>),
     Clamp(VarRef<T>, T, T),
+    Select(VarRef<T>, usize, usize),
+    Stack(Vec<VarRef<T>>, usize),
+    Reshape(VarRef<T>),
+    Permute(VarRef<T>, Vec<usize>),
+    Unfold(VarRef<T>, (usize, usize), (usize, usize), (usize, usize)),
+    MaxAxis(VarRef<T>, usize),
+    Tanh(VarRef<T>),
+    Sigmoid(VarRef<T>),
+    Gather(VarRef<T>, std::rc::Rc<Vec<usize>>),
 }
 
 impl<T:Float> OpKind<T> {
@@ -137,6 +146,15 @@ impl<T:Float> OpKind<T> {
             OpKind::Log(a) => vec![a.clone()],
             OpKind::Abs(a) => vec![a.clone()],
             OpKind::Clamp(a, _, _) => vec![a.clone()],
+            OpKind::Select(a, _, _) => vec![a.clone()],
+            OpKind::Stack(parts, _) => parts.clone(),
+            OpKind::Reshape(a) => vec![a.clone()],
+            OpKind::Permute(a, _) => vec![a.clone()],
+            OpKind::Unfold(a, _, _, _) => vec![a.clone()],
+            OpKind::MaxAxis(a, _) => vec![a.clone()],
+            OpKind::Tanh(a) => vec![a.clone()],
+            OpKind::Sigmoid(a) => vec![a.clone()],
+            OpKind::Gather(a, _) => vec![a.clone()],
         }
     }
 
@@ -242,7 +260,7 @@ impl<T:Float> OpKind<T> {
 
                 assert!(ndim_a >= 2 && ndim_b >= 2, "!!!Tensor must be at least 2D!!!");
                 
-                // transpose (permute последних двух осей) как view
+                // transpose (a permute of the last two axes) as a view
                 let mut axes_a_t: Vec<usize> = (0..ndim_a).collect();
                 axes_a_t.swap(ndim_a - 1, ndim_a - 2);
                 
@@ -252,7 +270,7 @@ impl<T:Float> OpKind<T> {
                 let a_t = a_val.permute(&axes_a_t).unwrap(); // A^T view
                 let b_t = b_val.permute(&axes_b_t).unwrap(); // B^T view
 
-                // Правильно:
+                // Correct:
                 // dA = dC @ B^T
                 let ga = out_grad.matmul(&b_t);
 
@@ -305,6 +323,96 @@ impl<T:Float> OpKind<T> {
                 let sign = a.borrow().value.map(|x| x.sign());
                 let ga = out_grad & &sign;
                 vec![(a.clone(), ga)]
+            }
+            OpKind::Gather(a, indices) => {
+                // every picked row hands its gradient back to its own place in
+                // the table, and repeats are summed
+                let rows = a.borrow().value.get_shape()[0];
+                let ga = out_grad.scatter_add_rows(indices, rows);
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Tanh(a) => {
+                // d/dx tanh(x) = 1 - tanh(x)^2, and tanh(x) is the value we
+                // already computed, so nothing has to be recomputed
+                let ga = out_grad & &out_value.map(|y| T::one() - y * y);
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Sigmoid(a) => {
+                // d/dx s(x) = s(x) (1 - s(x)), likewise straight from the value
+                let ga = out_grad & &out_value.map(|y| y * (T::one() - y));
+                vec![(a.clone(), ga)]
+            }
+            OpKind::MaxAxis(a, axis) => {
+                // only the winning element of each run was passed on, so only it
+                // receives a gradient; the rest of the run contributed nothing
+                let value = a.borrow().value.shallow_copy();
+                let winners = value.argmax_axis(*axis);
+
+                let shape = value.get_shape();
+                let reduce_dim = shape[*axis];
+                let inner: usize = shape[*axis + 1..].iter().product();
+
+                let grad = out_grad.packed_data();
+                let mut data = vec![T::default(); crate::linalg::product(&shape)];
+
+                for (out_idx, &k) in winners.iter().enumerate() {
+                    // out_idx walks the reduced tensor; splitting it at the axis
+                    // gives the position of the run in the full one
+                    let outer = out_idx / inner;
+                    let within = out_idx % inner;
+
+                    data[(outer * reduce_dim + k) * inner + within] = grad[out_idx];
+                }
+
+                vec![(a.clone(), Tensor::new(data, shape))]
+            }
+            OpKind::Reshape(a) => {
+                // the elements are the same ones in the same order, only the
+                // shape changed, so the gradient just changes shape back
+                let a_shape = a.borrow().value.get_shape();
+                let ga = Tensor::new(out_grad.packed_data(), a_shape);
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Permute(a, axes) => {
+                // undo the permutation: inverse[axes[i]] = i
+                let mut inverse = vec![0usize; axes.len()];
+                for (i, &axis) in axes.iter().enumerate() {
+                    inverse[axis] = i;
+                }
+
+                let permuted = out_grad
+                    .permute(&inverse)
+                    .expect("permute backward got a bad axis list (bug)");
+                let ga = Tensor::new(permuted.packed_data(), permuted.get_shape());
+
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Unfold(a, kernel, stride, padding) => {
+                // a pixel read by several windows collects a gradient from each,
+                // which is exactly what fold_2d sums up
+                let shape = a.borrow().value.get_shape();
+                let ga = out_grad.fold_2d(
+                    [shape[0], shape[1], shape[2], shape[3]],
+                    *kernel,
+                    *stride,
+                    *padding,
+                );
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Select(a, axis, index) => {
+                // the gradient belongs to the slice that was taken; every other
+                // position of the input contributed nothing
+                let a_shape = a.borrow().value.get_shape();
+                let ga = out_grad.scatter_select(&a_shape, *axis, *index);
+                vec![(a.clone(), ga)]
+            }
+            OpKind::Stack(parts, axis) => {
+                // each part gets back exactly the slice of the gradient it filled
+                parts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (p.clone(), out_grad.select(*axis, i)))
+                    .collect()
             }
             OpKind::Clamp(a, min, max) => {
                 // the gradient passes through untouched inside the range and is

@@ -20,7 +20,7 @@ impl<T: Float> Module<T> for LayerNorm<T> {
     fn forward(&self, x: &VarRef<T>) -> VarRef<T> {
         let shape = x.0.borrow().value.shape.clone();
         let ndim = shape.len();
-        let axis = ndim - 1; // последняя ось
+        let axis = ndim - 1; // the last axis
         let features = shape[axis];
 
         let mean = &sum_axis_op(x, axis, true) / T::from_usize(features);
@@ -56,7 +56,7 @@ mod tests {
     use super::*;
     use crate::{tensor};
 
-    // Вспомогательная функция для сравнения тензоров с допуском
+    // A helper for comparing tensors within a tolerance
     fn assert_tensor_approx_eq(t1: &Tensor<f32>, t2: &Tensor<f32>, eps: f32) {
         assert_eq!(t1.get_shape(), t2.get_shape());
         for (a, b) in t1.get_data().iter().zip(t2.get_data().iter()) {
@@ -75,7 +75,7 @@ mod tests {
         let output = layer.forward(&x);
         let output_tensor = output.0.borrow().value.clone();
 
-        // Ожидаемый результат (нормализация по последней оси)
+        // The expected result (normalised along the last axis)
         let expected = tensor![[-1.22474487, 0.0, 1.22474487],
                                [-1.22474487, 0.0, 1.22474487]];
 
@@ -88,7 +88,7 @@ mod tests {
         let epsilon = 1e-5;
         let layer = LayerNorm::new(features, epsilon);
 
-        // Устанавливаем gamma и beta (форма [1, features])
+        // Setting gamma and beta (of shape [1, features])
         layer.gamma.0.borrow_mut().value = tensor![[2.0, 3.0]];
         layer.beta.0.borrow_mut().value = tensor![[0.5, -0.5]];
 
@@ -97,7 +97,7 @@ mod tests {
         let output = layer.forward(&x);
         let output_tensor = output.0.borrow().value.clone();
 
-        // Ожидаемый результат после масштабирования и сдвига
+        // The expected result after the scale and the shift
         let expected = tensor![[-1.5, 2.5],
                                [-1.5, 2.5]];
 
@@ -110,12 +110,12 @@ mod tests {
         let epsilon = 1e-5;
         let layer = LayerNorm::new(features, epsilon);
 
-        let x = Var::leaf(tensor![[2.0], [5.0]], false); // форма [2,1]
+        let x = Var::leaf(tensor![[2.0], [5.0]], false); // of shape [2, 1]
 
         let output = layer.forward(&x);
         let output_tensor = output.0.borrow().value.clone();
 
-        // Для одного признака x_hat = 0
+        // With a single feature x_hat is 0
         let expected = tensor![[0.0], [0.0]];
 
         assert_tensor_approx_eq(&output_tensor, &expected, 1e-5);
@@ -130,7 +130,7 @@ mod tests {
         let params = layer.parameters();
         assert_eq!(params.len(), 2);
 
-        // Проверяем форму и начальные значения
+        // Check the shape and the initial values
         let gamma_data = params[0].0.borrow().value.clone();
         let beta_data = params[1].0.borrow().value.clone();
 
@@ -158,7 +158,7 @@ mod tests {
         let tensor_large = out_large.0.borrow().value.clone();
         let tensor_small = out_small.0.borrow().value.clone();
 
-        // Проверяем, что результаты различаются
+        // Check that the results differ
         let mut diff = false;
         for (a, b) in tensor_large.get_data().iter().zip(tensor_small.get_data().iter()) {
             if (a - b).abs() > 1e-6 {
@@ -169,7 +169,7 @@ mod tests {
         assert!(diff, "Outputs with different epsilon should differ");
     }
 
-    // Дополнительный тест для проверки работы с разными размерами
+    // A further test, covering a range of sizes
     #[test]
     fn test_layer_norm_various_shapes() {
         let shapes = vec![
@@ -180,14 +180,14 @@ mod tests {
 
         for (batch, features) in shapes {
             let layer = LayerNorm::new(features, 1e-5);
-            // Создаём тензор с последовательными числами
+            // Build a tensor of consecutive numbers
             let mut data = Vec::new();
             for i in 0..batch {
                 for j in 0..features {
                     data.push((i * features + j) as f32);
                 }
             }
-            // Используем tensor! динамически? Лучше создать через from_vec
+            // tensor! cannot be built dynamically, so from_vec it is
             let x = Var::leaf(Tensor::new(data, vec![batch, features]), false);
             let output = layer.forward(&x);
             assert_eq!(output.0.borrow().value.get_shape(), &[batch, features]);

@@ -6,8 +6,6 @@
 //! The library uses the following dependencies:
 //! - [rayon](https://crates.io/crates/rayon) - for parallel computations on CPU.
 //! - [rand](https://crates.io/crates/rand) - for random number generation.
-//! - [serde](https://crates.io/crates/serde) - for saving models.
-//! - [serde_json](https://crates.io/crates/serde_json) - for loading models.
 //!
 //! ## Example
 //! ```rust
@@ -132,6 +130,9 @@ pub trait Float: Num {
     fn from_str(value: &str) -> Self;
     fn cos(self) -> Self;
     fn sin(self) -> Self;
+    /// Hyperbolic tangent, taken from the platform rather than built out of
+    /// exponentials, which overflow long before the function itself saturates.
+    fn tanh(self) -> Self;
     fn atan2(self, n:Self) -> Self;
     fn pi() -> Self;
     fn f32_f64(a: f32, b: f64) -> Self;
@@ -143,7 +144,7 @@ macro_rules! impl_some_float_for_types {
     ($($type:ty),*) => {
         $(
             fn one() -> Self {1.0}
-            fn pi() -> Self {3.14159}
+            fn pi() -> Self { Self::f32_f64(core::f32::consts::PI, core::f64::consts::PI) }
             fn sign(self) -> Self {
                 if self > Self::default() {
                     1.0
@@ -156,6 +157,7 @@ macro_rules! impl_some_float_for_types {
             fn sqrt(self) -> Self { self.sqrt() }
             fn cos(self) -> Self {self.cos()}
             fn sin(self) -> Self {self.sin()}
+            fn tanh(self) -> Self {self.tanh()}
             fn atan2(self, n:Self) -> Self {self.atan2(n)}
             fn exp(self) -> Self {self.exp()}
             fn ln(self) -> Self { self.ln() }

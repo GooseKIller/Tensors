@@ -1,26 +1,30 @@
-use crate::{Float, activation::Module, linalg::Tensor, autodiff::Var};
+use crate::{Float, activation::Module};
 
 /// Hyperbolic Tangent (Tanh) activation function.
 ///
 /// Maps input values to the range `[-1, 1]`.
 ///
-/// # Mathematical Definition
-/// For an input `x`, the Tanh function is defined as:
+/// # Formula
 /// ```math
-/// tanh(x) = \frac{e^{2x} - 1}{e^{2x} + 1}
+/// \tanh(x) = \frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}
 /// ```
 ///
-/// # Examples
+/// # Example
 /// ```
 /// use tensorrs::activation::{Module, Tanh};
 /// use tensorrs::linalg::Tensor;
 /// use tensorrs::autodiff::{Var, AutoGrad};
 ///
-/// let tanh = Tanh::new();
-/// let input = Tensor::from(vec![vec![0.0], vec![1.0], vec![-1.0]]);
-/// let output = tanh.forward(&Var::leaf(input, false));
-/// println!("Tanh output: {}", output.value());
+/// let input = Tensor::from(vec![vec![0.0f32], vec![90.0], vec![-90.0]]);
+/// let output = Tanh::new().forward(&Var::leaf(input, false));
+///
+/// // saturates instead of overflowing, at any magnitude
+/// assert_eq!(output.value().get_data(), vec![0.0, 1.0, -1.0]);
 /// ```
+///
+/// # Notes
+/// A single graph node, see [tanh_op](crate::autodiff::tanh_op). Its derivative is
+/// read off the output as `1 - tanh^2(x)`, which costs one multiply per element.
 ///
 /// # See Also
 /// - [Wikipedia: Hyperbolic functions](https://en.wikipedia.org/wiki/Hyperbolic_functions)
@@ -38,19 +42,7 @@ impl Tanh {
 
 impl<T: Float> Module<T> for Tanh {
     fn forward(&self, x: &crate::autodiff::VarRef<T>) -> crate::autodiff::VarRef<T> {
-        let e_val = T::f32_f64(std::f32::consts::E, std::f64::consts::E);
-        let e = Var::leaf(Tensor::scalar(e_val), false);
-
-        // e^x
-        let exp_x = &e ^ x;
-        // e^(-x)
-        let exp_neg_x = &e ^ &-x;
-
-        // (e^x - e^-x) / (e^x + e^-x)
-        let numerator = &exp_x - &exp_neg_x;
-        let denominator = &exp_x + &exp_neg_x;
-
-        &numerator / &denominator
+        crate::autodiff::tanh_op(x)
     }
 
     fn parameters(&self) -> Vec<crate::autodiff::VarRef<T>> {

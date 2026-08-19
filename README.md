@@ -9,14 +9,42 @@ It provides a simple and efficient way to build and train neural networks with m
 The API is unstable — function names, argument types, and behaviors may change at any time.  
 Use at your own risk and pin exact versions if needed.
 
+## What's Inside
+
+**Tensor** — arbitrary rank, with broadcasting, strided views, batched `matmul`,
+and an N-dimensional convolution that switches between the direct algorithm and
+an FFT depending on which is cheaper for the given sizes.
+
+**Autodiff** — reverse mode over a tape built as you go. Every operation below is
+differentiable, and `backward()` walks the graph once.
+
+**Layers** (`nn`)
+
+| | |
+|---|---|
+| `Linear` | fully connected, with optional bias and a choice of initializer |
+| `Conv2d` | 2-D convolution over `[batch, channels, height, width]` |
+| `MaxPool2d`, `AvgPool2d` | downsampling |
+| `Flatten` | from feature maps to a vector |
+| `RNN`, `RNNCell` | recurrence, returning the last state or the whole sequence |
+| `MultiHeadAttention` | self- and cross-attention, with `causal_mask` for decoders |
+| `Embedding`, `PositionalEncoding` | token ids into vectors, and their order |
+| `LayerNorm`, `Dropout` | normalisation and regularisation |
+| `Sequential` | stacks the above |
+
+**Activations** (`activation`) — `ReLU`, `LeakyReLU`, `PReLU`, `ELU`, `SELU`,
+`Sigmoid`, `Tanh`, `SoftMax`.
+
+**Losses** (`loss`) — `mse`, `sse`, `mape`, `cross_entropy`, `binary_cross_entropy`.
+
+**Optimizers** (`optim`) — `SGD`, `Adam`, `RMSprop`, with gradient clipping.
+
 ## Dependencies
 
 Tensorrs uses the following crates:
 
 - [`rayon`](https://crates.io/crates/rayon) — for parallel CPU computations
 - [`rand`](https://crates.io/crates/rand) — for random number generation
-- [`serde`](https://crates.io/crates/serde) — for model serialization
-- [`serde_json`](https://crates.io/crates/serde_json) — for model deserialization
 
 ## Installation
 
@@ -30,12 +58,12 @@ tensorrs = "0.3.3"
 ## Example Usage
 ```rust
 use tensorrs::{
-    activation::{Module, Sigmoid}, 
-    loss::binary_cross_entropy, 
-    nn::{Linear, Sequential}, 
-    optim::{Adam, Optimizer}, 
-    tensor, 
-    utils::{AutoGrad, Var}
+    activation::{Module, Sigmoid},
+    autodiff::{AutoGrad, Var},
+    loss::binary_cross_entropy,
+    nn::{Linear, Sequential},
+    optim::{Adam, Optimizer},
+    tensor,
 };
 // simple xor gate realization
 fn main() {
@@ -78,10 +106,22 @@ fn main() {
         }
     }
 
-    println!("Final output: {}", model.forward(&x));
+    println!("Final output: {}", model.forward(&x).value());
 }
 ```
 
+## More Examples
+
+Run any of them with `cargo run --release --example <name>`:
+
+| Example | What it shows |
+|---|---|
+| `1layer_xor`, `xor_model` | the smallest possible network |
+| `residual_net` | residual connections |
+| `cnn_stripes` | `Conv2d` and pooling on an image task |
+| `rnn_sum` | recurrence, and why gradient clipping matters |
+| `transformer_block` | attention with residuals and `LayerNorm` |
+| `transformer_lm` | a transformer end to end, from token ids to a distribution |
 
 ## Contributing
 

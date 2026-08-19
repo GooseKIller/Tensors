@@ -2,7 +2,7 @@ use std::ops::Add;
 
 use crate::{Float, autodiff::core::{VarRef, build_topo}, linalg::Tensor};
 
-/// Интерфейс автограда
+/// The autograd interface
 #[allow(dead_code)]
 pub trait AutoGrad {
     type Elem: Float;
@@ -12,12 +12,17 @@ pub trait AutoGrad {
     fn backward(&self);
 }
 
-/// impl для VarRef (struct)
+/// The implementation for VarRef
 impl<T: Float> AutoGrad for VarRef<T> {
     type Elem = T;
 
     fn value(&self) -> Tensor<T> {
-        self.borrow().value.clone()
+        // shallow_copy rather than clone: clone on a tensor copies all of the
+        // data, and this method is called in every forward pass just for the
+        // shape. The copy shares the buffer, but the value of a node can still
+        // only be changed by assignment, and full_ clones the buffer on write -
+        // so the observable behaviour is the same.
+        self.borrow().value.shallow_copy()
     }
 
     fn grad(&self) -> Tensor<T> {
@@ -25,7 +30,7 @@ impl<T: Float> AutoGrad for VarRef<T> {
     }
 
     fn zero_grad(&self) {
-        // С кэшированием - используем topo из backward или строим
+        // Cached: reuse the topology from backward, or build it
         let topo = self.0.borrow().cached_topo.borrow().clone();
         
         let topo = match topo {
@@ -45,7 +50,7 @@ impl<T: Float> AutoGrad for VarRef<T> {
     }
 
     fn backward(&self) {
-        // С кэшированием - первый вызов строит, последующие используют кэш
+        // Cached: the first call builds it, later ones reuse it
         let topo = self.0.borrow().cached_topo.borrow().clone();
         
         let topo = match topo {
@@ -69,10 +74,21 @@ impl<T: Float> AutoGrad for VarRef<T> {
         }
         
         for node in topo.iter().rev() {
-            // Одновременно получаем все необходимые данные
+            // Everything needed is taken in one go
             let (out_grad, out_value, op) = {
                 let node_ref = node.0.borrow();
-                let grad = node_ref.grad.borrow().clone();
+
+                // If a node requires no gradient then neither does any of its
+                // ancestors - requires_grad propagates forward from the leaves.
+                // So its whole branch of the backward pass can be skipped.
+                if !node_ref.requires_grad {
+                    continue;
+                }
+
+                // shallow_copy rather than clone: the gradient is only read
+                // here, while clone on a tensor is a full deep copy - that is,
+                // an allocation for every node of the graph.
+                let grad = node_ref.grad.borrow().shallow_copy();
                 let val = node_ref.value.shallow_copy();
                 let op = node_ref.op.clone();
                 (grad, val, op)
@@ -117,5 +133,43 @@ impl<T: Float> AutoGrad for VarRef<T> {
                 *p.grad.borrow_mut() = new_grad;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        autodiff::{AutoGrad, Var},
+        tensor,
+    };
+
+    #[test]
+    fn a_branch_without_grad_is_skipped_but_the_other_one_still_learns() {
+        // backward() steps over any node that does not require a gradient; the
+        // branch that does must be unaffected by that
+        let tracked = Var::leaf(tensor![[1.0f64, 2.0]], true);
+        let frozen = Var::leaf(tensor![[3.0f64, 4.0]], false);
+
+        let left = &(&tracked + &frozen) & &frozen;
+        let right = &frozen & &frozen; // entirely outside the gradient path
+
+        let out = &left + &right;
+        out.sum().backward();
+
+        // d/d tracked of (tracked + frozen) * frozen is frozen itself
+        assert_eq!(tracked.grad().get_data(), vec![3.0, 4.0]);
+        // and the frozen leaf collected nothing
+        assert_eq!(frozen.grad().get_data(), vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn nothing_requiring_grad_means_nothing_happens() {
+        let a = Var::leaf(tensor![[1.0f64, 2.0]], false);
+        let b = Var::leaf(tensor![[3.0f64, 4.0]], false);
+
+        let out = &a + &b;
+        out.sum().backward(); // must not panic
+
+        assert_eq!(a.grad().get_data(), vec![0.0, 0.0]);
     }
 }

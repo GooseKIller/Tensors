@@ -59,9 +59,9 @@ use crate::{Float, linalg::Tensor, optim::Optimizer, autodiff::{AutoGrad, VarRef
 pub struct Adam<T:Float> {
     params: Vec<VarRef<T>>,
     lr: T,
-    m: Vec<Tensor<T>>, // Первый момент (среднее)
-    v: Vec<Tensor<T>>, // Второй момент (нецентрированная дисперсия)
-    t: usize,          // Счетчик шагов
+    m: Vec<Tensor<T>>, // the first moment (the mean)
+    v: Vec<Tensor<T>>, // the second moment (the uncentred variance)
+    t: usize,          // the step counter
     beta1: T,
     beta2: T,
     eps: T,
@@ -124,18 +124,18 @@ impl<T: Float> Optimizer<T> for Adam<T> {
             let mut p = param.borrow_mut();
             let grad = p.grad.borrow().shallow_copy();
 
-            // 1. Обновляем моменты: m = beta1 * m + (1 - beta1) * grad
+            // 1. Update the moment: m = beta1 * m + (1 - beta1) * grad
             self.m[i] = &(&self.m[i] * self.beta1) + &(&grad * (T::one() - self.beta1));
 
-            // 2. Обновляем дисперсию: v = beta2 * v + (1 - beta2) * grad^2
+            // 2. Update the variance: v = beta2 * v + (1 - beta2) * grad^2
             let grad_sq = &grad & &grad;
             self.v[i] = &(&self.v[i] * self.beta2) + &(&grad_sq * (T::one() - self.beta2));
 
-            // 3. Корректировка смещения (Bias correction)
+            // 3. Bias correction
             let m_hat = &self.m[i] / (T::one() - (self.beta1.powf(t.clone())));
             let v_hat = &self.v[i] / (T::one() - (self.beta2.powf(t)));
 
-            // 4. Обновление весов: w = w - lr * m_hat / (sqrt(v_hat) + eps)
+            // 4. Update the weights: w = w - lr * m_hat / (sqrt(v_hat) + eps)
             let v_sqrt = v_hat.map(|x| x.sqrt() + self.eps);
             let update = &(&m_hat * self.lr) / &v_sqrt;
 

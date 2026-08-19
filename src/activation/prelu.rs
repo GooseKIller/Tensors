@@ -66,7 +66,7 @@ impl<T:Float> Module<T> for PReLU<T>  {
 
         let neg_part = &(x & &self.value) & &m_neg;
 
-        // 4. Сумма веток: x (если x > 0) + alpha * x (если x <= 0)
+        // 4. The two branches summed: x (where x > 0) + alpha * x (where x <= 0)
         &pos_part + &neg_part
     }
     fn parameters(&self) -> Vec<VarRef<T>> {

@@ -87,32 +87,32 @@ fn main() {
     let features = 20;
     let batch_size = 32;
 
-    // 1. Генерируем данные
+    // 1. Generate the data
     let x_val = Tensor::randn(vec![n_samples, features]);
     let y_val = x_val.sum_axis_keepdim(1).map(|x| if x > 0. { 1. } else { 0. });
 
     let model = ResNetBN::new(features, 16, 3);
-    let mut optim = Adam::new(model.parameters(), 0.001); // Консервативный LR
+    let mut optim = Adam::new(model.parameters(), 0.001); // a conservative learning rate
 
     for epoch in 0..50 {
         let mut epoch_loss = 0.0;
         let mut num_batches = 0;
 
-        // Создаем индексы для перемешивания
+        // Build the indices used for shuffling
         //let mut indices: Vec<usize> = (0..n_samples).collect();
-        // Тут можно добавить shuffle(indices), если есть рандом
+        // shuffle(indices) would go here, given a source of randomness
 
         for i in (0..n_samples).step_by(batch_size) {
             let current_batch_size = (i + batch_size).min(n_samples) - i;
             if current_batch_size == 0 { break; }
 
-            // Используем твой метод slice
-            // start_indices: [откуда берем по строкам, откуда по столбцам]
-            // shape: [сколько берем строк, сколько столбцов]
+            // using the slice method
+            // start_indices: [where to start along rows, where along columns]
+            // shape: [how many rows to take, how many columns]
             let x_batch_val = x_val.slice(&[i, 0], &[current_batch_size, features]).unwrap();
             let y_batch_val = y_val.slice(&[i, 0], &[current_batch_size, 1]).unwrap();
 
-            // ВАЖНО: оборачиваем в листья без градиентов
+            // IMPORTANT: wrapped in leaves that carry no gradient
             let x_batch = Var::leaf(x_batch_val, false);
             let y_batch = Var::leaf(y_batch_val, false);
 

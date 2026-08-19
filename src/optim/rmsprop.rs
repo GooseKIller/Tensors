@@ -3,9 +3,9 @@ use crate::{Float, linalg::Tensor, optim::Optimizer, autodiff::{AutoGrad, VarRef
 pub struct RMSprop<T: Float> {
     params: Vec<VarRef<T>>,
     lr: T,
-    v: Vec<Tensor<T>>, // Скользящее среднее квадратов градиентов
-    alpha: T,          // Коэффициент сглаживания (обычно 0.99)
-    eps: T,            // Малое число для стабильности
+    v: Vec<Tensor<T>>, // the running average of the squared gradients
+    alpha: T,          // the smoothing coefficient (usually 0.99)
+    eps: T,            // a small number, for stability
 }
 
 impl<T: Float> RMSprop<T> {
@@ -32,15 +32,15 @@ impl<T: Float> Optimizer<T> for RMSprop<T> {
             let mut p = param.borrow_mut();
             let grad = p.grad.borrow().shallow_copy();
 
-            // 1. Обновляем v: v = alpha * v + (1 - alpha) * grad^2
+            // 1. Update v: v = alpha * v + (1 - alpha) * grad^2
             let grad_sq = &grad & &grad;
             self.v[i] = &(&self.v[i] * self.alpha) + &(&grad_sq * (T::one() - self.alpha));
 
-            // 2. Считаем обновление: lr * grad / (sqrt(v) + eps)
+            // 2. Work out the update: lr * grad / (sqrt(v) + eps)
             let v_sqrt = self.v[i].map(|x| x.sqrt() + self.eps);
             let update = &(&grad * self.lr) / &v_sqrt;
 
-            // 3. Обновляем веса
+            // 3. Update the weights
             p.value = &p.value - &update;
         }
     }

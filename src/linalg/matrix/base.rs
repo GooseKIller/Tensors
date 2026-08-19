@@ -917,7 +917,7 @@ impl<T: Num> Matrix<T> {
 
                     for ki in 0..kernel.rows {
                         for kj in 0..kernel.cols {
-                            // Вычисляем координаты с зеркальным отражением
+                            // Work out the coordinates with a mirror reflection
                             let mi = mirror_index(i as i32 + ki as i32 - pad_rows as i32, self.rows);
                             let mj = mirror_index(j as i32 + kj as i32 - pad_cols as i32, self.cols);
                             
@@ -1002,7 +1002,7 @@ impl<T: Num> Matrix<T> {
         self.data.chunks(self.cols)
     }
     
-    // Итератор по строкам с мутабельностью
+    // A row iterator that hands out mutable access
     pub fn rows_iter_mut(&mut self) -> impl Iterator<Item = &mut [T]> {
         self.data.chunks_mut(self.cols)
     }
@@ -1345,7 +1345,7 @@ impl<T: Float> Matrix<T> {
             let (q, r) = a.qr();
             a = r * &q;
 
-            // проверка сходимости
+            // the convergence check
             let mut off_diag_norm = T::default();
             for i in 0..n {
                 for j in 0..i {
@@ -1446,22 +1446,22 @@ impl<T: Float> Matrix<T> {
 
         let mut i = 0;
         while i < n {
-            // Проверяем 2x2 блок (в форме Шура это блок с комплексными собственными значениями)
+            // Check the 2x2 block (in Schur form this is a block with complex eigenvalues)
             if i + 1 < n && self[[i + 1, i]].abs() > T::from_f64(1e-10) {
-                // Блок 2x2 в форме Шура
+                // A 2x2 block in Schur form
                 let a = self[[i, i]];
                 let b = self[[i, i + 1]];
                 let c = self[[i + 1, i]];
                 let d = self[[i + 1, i + 1]];
 
-                // В форме Шура блок 2x2 имеет вид [a, b; c, d] с c ≠ 0
-                // и соответствует паре комплексно-сопряженных собственных значений
+                // In Schur form a 2x2 block has the shape [a, b; c, d] with c != 0
+                // and corresponds to a pair of complex-conjugate eigenvalues
                 
-                // Собственные значения: λ = α ± iβ, где α = (a+d)/2, β = √(-bc)
+                // Eigenvalues: lambda = alpha +- i*beta, where alpha = (a+d)/2, beta = sqrt(-bc)
                 let alpha = (a + d) / T::from_usize(2);
                 let beta = (-b * c).sqrt();
                 
-                // Модуль и аргумент комплексного числа
+                // The modulus and the argument of a complex number
                 let r = (alpha * alpha + beta * beta).sqrt();
                 let theta = beta.atan2(alpha);
                 
@@ -1494,10 +1494,10 @@ impl<T: Float> Matrix<T> {
         let mut q = Matrix::identity(T::one(), n, n);
 
         for _ in 0..max_iters {
-            // Вычисляем сдвиг (используем последний диагональный элемент)
+            // Work out the shift (using the last diagonal element)
             let mu = a[[n - 1, n - 1]];
             
-            // QR разложение со сдвигом: A - μI = QR
+            // A shifted QR decomposition: A - mu*I = QR
             let mut a_shifted = a.clone();
             for i in 0..n {
                 a_shifted[[i, i]] = a_shifted[[i, i]] - mu;
@@ -1511,10 +1511,10 @@ impl<T: Float> Matrix<T> {
                 a[[i, i]] = a[[i, i]] + mu;
             }
             
-            // Накопление преобразований
+            // Accumulating the transformations
             q = &q * &q_k;
 
-            // Проверка сходимости (внедиагональные элементы малы)
+            // The convergence check (the off-diagonal elements are small)
             let mut converged = true;
             for i in 0..n {
                 for j in 0..i {
@@ -1824,10 +1824,10 @@ impl<T: Float> Matrix<T> {
         let rows = self.rows;
         let cols = self.cols;
         
-        // Сначала вычисляем средние по столбцам
+        // The column means first
         // let col_means = self.mean_cols();
         
-        // Для дисперсии используем Welford's online algorithm
+        // For the variance, Welford's online algorithm
         let variances: Vec<T> = (0..cols)
             .into_par_iter()
             .map(|col_idx| {
@@ -2365,7 +2365,7 @@ mod tests {
             [7.0, 8.0, 9.0]
         ];
 
-        let kernel = matrix![[1.0]]; // Единичное ядро 1x1
+        let kernel = matrix![[1.0]]; // a 1x1 identity kernel
 
         let result = matrix.conv(&kernel);
         
@@ -2395,11 +2395,11 @@ mod tests {
         println!("Sobel X result:");
         println!("{}", result);
         
-        // Проверяем размеры
+        // Check the sizes
         assert_eq!(result.rows, 3);
         assert_eq!(result.cols, 3);
         
-        // В однородных областях должен быть 0
+        // In uniform regions it has to be 0
         assert_eq!(result.data[1 * result.cols + 1], -3.0);
     }
 

@@ -7,6 +7,23 @@ use std::{ops::{
     Add, AddAssign, BitAnd, BitAndAssign, Mul, MulAssign, Sub, SubAssign
 }, sync::Arc};
 
+/// Below this size parallelism costs more than the work itself: handing tasks out
+/// to threads and collecting the result takes longer than the pass over the data.
+pub(crate) const PARALLEL_THRESHOLD: usize = 8192;
+
+/// Walks a slice, in parallel only if it is large enough to be worth it.
+#[inline]
+pub(crate) fn each_mut<T: Num, F>(data: &mut [T], f: F)
+where
+    F: Fn(&mut T) + Sync + Send,
+{
+    if data.len() < PARALLEL_THRESHOLD {
+        data.iter_mut().for_each(f);
+    } else {
+        data.par_iter_mut().for_each(f);
+    }
+}
+
 pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Option<Vec<usize>> {
     let ndim = a.len().max(b.len());
     let mut out = Vec::with_capacity(ndim);
@@ -36,8 +53,7 @@ impl<T: Num> Add<T> for &Tensor<T> {
     type Output = Tensor<T>;
     fn add(self, rhs: T) -> Self::Output {
         let mut out = self.packed_data();
-        out.par_iter_mut()
-            .for_each(|x| *x += rhs );
+        each_mut(&mut out, |x| *x += rhs);
         Tensor::new(out, self.shape.clone())
     }
 }
@@ -47,7 +63,7 @@ impl<T: Num> Add<T> for Tensor<T> {
     fn add(mut self, rhs: T) -> Self::Output {
         if self.can_inplace() {
             let storage = Arc::make_mut(&mut self.storage);
-            storage.data.par_iter_mut().for_each(|x| *x += rhs);
+            each_mut(&mut storage.data, |x| *x += rhs);
             self
         } else {
             (&self).add(rhs)
@@ -62,7 +78,7 @@ impl<T: Num> AddAssign<T> for Tensor<T> {
             "AddAssign: in-place operation disallowed on non-contiguous / aliased / broadcasted tensor"
         );
         let storage = Arc::make_mut(&mut self.storage);
-        storage.data.par_iter_mut().for_each(|x| *x += rhs);
+        each_mut(&mut storage.data, |x| *x += rhs);
 
     }
 }
@@ -72,8 +88,7 @@ impl<T: Num> Sub<T> for &Tensor<T> {
     type Output = Tensor<T>;
     fn sub(self, rhs: T) -> Self::Output {
         let mut out = self.packed_data();
-        out.par_iter_mut()
-            .for_each(|x| *x -= rhs );
+        each_mut(&mut out, |x| *x -= rhs);
         Tensor::new(out, self.shape.clone())
     }
 }
@@ -83,7 +98,7 @@ impl<T: Num> Sub<T> for Tensor<T> {
     fn sub(mut self, rhs: T) -> Self::Output {
         if self.can_inplace() {
             let storage = Arc::make_mut(&mut self.storage);
-            storage.data.par_iter_mut().for_each(|x| *x -= rhs);
+            each_mut(&mut storage.data, |x| *x -= rhs);
             self
         } else {
             (&self).sub(rhs)
@@ -99,7 +114,7 @@ impl<T: Num> SubAssign<T> for Tensor<T> {
             "SubAssign: in-place operation disallowed on non-contiguous / aliased / broadcasted tensor"
         );
         let storage = Arc::make_mut(&mut self.storage);
-        storage.data.par_iter_mut().for_each(|x| *x -= rhs);
+        each_mut(&mut storage.data, |x| *x -= rhs);
     }
 }
 
@@ -111,8 +126,7 @@ macro_rules! impl_sub_tensor_for_types {
 
                 fn sub(self, rhs: &Tensor<$type>) -> Tensor<$type> {
                     let mut out = rhs.packed_data();
-                    out.par_iter_mut()
-                        .for_each(|x| *x = self - *x );
+                    each_mut(&mut out, |x| *x = self - *x);
                     Tensor::new(out, rhs.shape.clone())
                 }
             }
@@ -123,7 +137,7 @@ macro_rules! impl_sub_tensor_for_types {
                 fn sub(self, mut rhs: Tensor<$type>) -> Tensor<$type> {
                     if rhs.can_inplace() {
                         if let Some(storage) = Arc::get_mut(&mut rhs.storage) {
-                            storage.data.par_iter_mut().for_each(|x| *x = self - *x);
+                            each_mut(&mut storage.data, |x| *x = self - *x);
                             return rhs;
                         }
                     }
@@ -140,7 +154,7 @@ impl<T:Num> Neg for Tensor<T> {
     fn neg(mut self) -> Self::Output {
         if self.can_inplace() {
             let storage = Arc::make_mut(&mut self.storage);
-            storage.data.par_iter_mut().for_each(|x| *x = -*x);
+            each_mut(&mut storage.data, |x| *x = -*x);
             self
         } else {
             let mut data = self.packed_data();
@@ -166,8 +180,7 @@ impl<T: Num> Mul<T> for &Tensor<T> {
     type Output = Tensor<T>;
     fn mul(self, rhs: T) -> Self::Output {
         let mut out = self.packed_data();
-        out.par_iter_mut()
-            .for_each(|x| *x *= rhs );
+        each_mut(&mut out, |x| *x *= rhs);
         Tensor::new(out, self.shape.clone())
     }
 }
@@ -177,7 +190,7 @@ impl<T: Num> Mul<T> for Tensor<T> {
     fn mul(mut self, rhs: T) -> Self::Output {
         if self.can_inplace() {
             let storage = Arc::make_mut(&mut self.storage);
-            storage.data.par_iter_mut().for_each(|x| *x *= rhs);
+            each_mut(&mut storage.data, |x| *x *= rhs);
             self
         } else {
             (&self).mul(rhs)
@@ -192,7 +205,7 @@ impl<T: Num> MulAssign<T> for Tensor<T> {
             "MulAssign: in-place operation disallowed on non-contiguous / aliased / broadcasted tensor"
         );
         let storage = Arc::make_mut(&mut self.storage);
-        storage.data.par_iter_mut().for_each(|x| *x *= rhs);
+        each_mut(&mut storage.data, |x| *x *= rhs);
     }
 }
 
@@ -202,8 +215,7 @@ impl<T: Num> Div<T> for &Tensor<T> {
     type Output = Tensor<T>;
     fn div(self, rhs: T) -> Self::Output {
         let mut out = self.packed_data();
-        out.par_iter_mut()
-            .for_each(|x| *x = *x / rhs);
+        each_mut(&mut out, |x| *x = *x / rhs);
         Tensor::new(out, self.shape.clone())
     }
 }
@@ -212,7 +224,7 @@ impl<T: Num> Div<T> for Tensor<T> {
     fn div(mut self, rhs: T) -> Self::Output {
         if self.can_inplace() {
             let storage = Arc::make_mut(&mut self.storage);
-            storage.data.par_iter_mut().for_each(|x| *x = *x / rhs);
+            each_mut(&mut storage.data, |x| *x = *x / rhs);
             self
         } else {
             (&self).div(rhs)
@@ -227,6 +239,33 @@ impl<T: Num> Div<T> for Tensor<T> {
 
 fn binary_op<F, T:Num>(a: &Tensor<T>, b: &Tensor<T>, f: F, error_msg: &str) -> Tensor<T>
     where F: Fn(T, T) -> T + Sync + Send {
+    // The fast path: matching shapes and both contiguous - then the elements lie
+    // one after another from their own offsets and can simply be walked together.
+    // The general path below builds two index vectors as long as the whole
+    // tensor, and this case is the most common one during training.
+    if a.shape == b.shape && a.is_contiguous() && b.is_contiguous() {
+        let n = product(&a.shape[..]);
+        let a_at = a.offset as usize;
+        let b_at = b.offset as usize;
+
+        let a_data = &a.storage.data[a_at..a_at + n];
+        let b_data = &b.storage.data[b_at..b_at + n];
+
+        let mut out = vec![T::default(); n];
+
+        if n < PARALLEL_THRESHOLD {
+            for (i, slot) in out.iter_mut().enumerate() {
+                *slot = f(a_data[i], b_data[i]);
+            }
+        } else {
+            out.par_iter_mut()
+                .enumerate()
+                .for_each(|(i, slot)| *slot = f(a_data[i], b_data[i]));
+        }
+
+        return Tensor::new(out, a.shape.clone());
+    }
+
     let shape = broadcast_shape(&a.shape[..], &b.shape[..])
         .expect(error_msg);
 
@@ -243,13 +282,19 @@ fn binary_op<F, T:Num>(a: &Tensor<T>, b: &Tensor<T>, f: F, error_msg: &str) -> T
 
     let mut out = vec![T::default(); n];
 
-    out.par_iter_mut()
-        .enumerate()
-        .for_each(|(i,slot)| {
-            let av = a_data[a_idx[i]];
-            let bv = b_data[b_idx[i]];
-            *slot = f(av, bv);
-        });
+    if n < PARALLEL_THRESHOLD {
+        for (i, slot) in out.iter_mut().enumerate() {
+            *slot = f(a_data[a_idx[i]], b_data[b_idx[i]]);
+        }
+    } else {
+        out.par_iter_mut()
+            .enumerate()
+            .for_each(|(i, slot)| {
+                let av = a_data[a_idx[i]];
+                let bv = b_data[b_idx[i]];
+                *slot = f(av, bv);
+            });
+    }
     
     Tensor::new(out, shape)
 }
@@ -515,10 +560,10 @@ mod test {
 
         let b = tensor![10, 20, 30];
 
-        // здесь broadcast → inplace быть не должно
+        // a broadcast here must not turn into an in-place write
         let c = &a + &b;
 
-        // убеждаемся, что a не изменился
+        // making sure a was left alone
         assert_eq!(
             a.get_data(),
             vec![

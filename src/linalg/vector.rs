@@ -978,9 +978,9 @@ mod tests {
                 zy = 3.0 * zx * zx * zy - zy * zy * zy + y;
                 zx = xtemp;
 
-                // Необычное условие останова
+                // An unusual stopping condition
                 if zx > 10.0 || zy > 10.0 || zx < -10.0 || zy < -10.0 {
-                    return (zx * zy).abs().min(1.0); // Для цветовой визуализации
+                    return (zx * zy).abs().min(1.0); // for colour visualisation
                 }
             }
             1.0

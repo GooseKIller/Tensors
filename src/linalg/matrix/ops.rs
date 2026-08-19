@@ -491,9 +491,9 @@ mod tests {
         use rayon::prelude::*;
         use crate::linalg::matrix::*;
 
-        // helper: прогрев + среднее время из `runs` прогонов
+        // helper: a warm-up plus the mean time over `runs` runs
         fn measure_avg<F: Fn() -> Matrix<f32>>(f: F, runs: usize) -> std::time::Duration {
-            // прогрев
+            // warm-up
             let _ = f();
             let mut total = std::time::Duration::ZERO;
             for _ in 0..runs {
@@ -504,7 +504,7 @@ mod tests {
             total / (runs as u32)
         }
 
-        // reference: single-thread (transpose b, обычные циклы)
+        // reference: single-thread (transpose b, plain loops)
         fn mtrxdot_ref_st(a: &Matrix<f32>, b: &Matrix<f32>) -> Matrix<f32> {
             assert_eq!(a.cols, b.rows);
             let rows = a.rows;
@@ -534,7 +534,7 @@ mod tests {
             Matrix::new(data, rows, cols)
         }
 
-        // reference: always-parallel (par по строкам)
+        // reference: always-parallel (par over the rows)
         fn mtrxdot_ref_par(a: &Matrix<f32>, b: &Matrix<f32>) -> Matrix<f32> {
             assert_eq!(a.cols, b.rows);
             let rows = a.rows;
@@ -570,7 +570,7 @@ mod tests {
             let a = Matrix::from_num((n as f32).powf(2.5), n, n);
             let b = Matrix::from_num(1.0f32, n, n);
 
-            // measure library function (если доступна)
+            // measure the library function (where available)
             let avg_lib = std::panic::catch_unwind(|| {
                 measure_avg(|| crate::linalg::mtrxdot(&a, &b), runs)
             });

@@ -1,55 +1,7 @@
-use std::ops::{Add, Mul, Sub};
-use rayon::prelude::*;
-use crate::{Float, linalg::Matrix};
-
-#[derive(Debug, Clone, Copy)]
-struct Complex<T: Float> {
-    pub re: T,
-    pub img: T,
-}
-
-impl<T:Float> Complex<T> {
-    fn new(re: T, img: T) -> Self {
-        Self { re, img }
-    }
-    
-    fn expi(theta: T) -> Self {
-        Self { re: theta.cos(), img: theta.sin() }
-    }
-}
-
-impl<T: Float> Add<Complex<T>> for Complex<T> {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self {
-        Self { re: self.re + rhs.re, img: self.img + rhs.img }
-    }
-}
-
-impl<T: Float> Sub<Complex<T>> for Complex<T> {
-    type Output = Self;
-    fn sub(self, rhs: Self) -> Self {
-        Self { re: self.re - rhs.re, img: self.img - rhs.img }
-    }
-}
-
-impl<T:Float> Mul<Complex<T>> for Complex<T> {
-    type Output = Self;
-
-    fn mul(self, rhs: Complex<T>) -> Self::Output {
-        Self {
-            re: self.re * rhs.re - self.img * rhs.img,
-            img: self.re * rhs.img + self.img * rhs.re,
-        }
-    }   
-}
-
-impl<T: Float> Mul<T> for Complex<T> {
-    type Output = Complex<T>;
-
-    fn mul(self, rhs: T) -> Self::Output {
-        Self { re: self.re * rhs, img: self.img * rhs }
-    }
-}
+use crate::{
+    Float,
+    linalg::{Matrix, fft::{Complex, Twiddles, fft_nd, split_and_multiply, twiddles_for}},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PaddingMode {
@@ -81,73 +33,29 @@ impl<T: Float> Matrix<T> {
         fft_convolution_2d(self, kernel, self.rows, self.cols, PaddingMode::Mirror(pad_rows, pad_cols))
     }
 
+    /// Picks between the direct and the FFT path, whichever should be faster.
+    ///
+    /// # Example
+    /// ```
+    /// use tensorrs::linalg::{Matrix, PaddingMode};
+    ///
+    /// let img: Matrix<f64> = Matrix::from_num(1.0, 64, 64);
+    /// let kernel: Matrix<f64> = Matrix::from_num(1.0 / 9.0, 3, 3);
+    ///
+    /// let out = img.smart_conv(&kernel, PaddingMode::Valid);
+    /// assert_eq!(out.shape(), [62, 62]);
+    /// ```
+    ///
+    /// # Arguments
+    /// * `kernel` — the kernel to convolve with.
+    /// * `mode` — see [PaddingMode].
+    ///
+    /// # Notes
+    /// The choice comes from comparing the work each path does — see
+    /// [prefers_fft]. Both paths agree to within floating point error, so the
+    /// decision only ever changes the running time.
     pub fn smart_conv(&self, kernel: &Matrix<T>, mode: PaddingMode) -> Matrix<T> {
-        const MS: [usize;5] = [64, 128, 256, 512, 1024];
-        const KS: [usize;4] = [3, 16, 64, 128];
-
-        let fft_table: [[Option<f64>;5];4] = [
-            // K=3
-            [Some(14.0), Some(27.0), Some(86.0), Some(383.0), Some(1611.0)],
-            // K=16
-            [Some(6.0), Some(22.0), Some(86.0), Some(367.0), Some(1610.0)],
-            // K=64
-            [Some(6.0), Some(22.0), Some(86.0), Some(362.0), Some(1613.0)],
-            // K=128
-            [None, Some(23.0), Some(85.0), Some(361.0), Some(1607.0)],
-        ];
-
-        // Direct times
-        let direct_table: [[Option<f64>;5];4] = [
-            // K=3
-            [Some(0.0), Some(1.0), Some(3.0), Some(12.0), None],
-            // K=16
-            [Some(2.0), Some(13.0), Some(61.0), Some(258.0), None],
-            // K=64
-            [Some(0.0), Some(69.0), Some(604.0), Some(3322.0), None],
-            // K=128
-            [None, Some(0.0), Some(1102.0), Some(10026.0), None],
-        ];
-
-        let n = self.rows.max(self.cols);
-        let k = kernel.rows.max(kernel.cols);
-
-        let log_n = (n as f64).log2();
-        let log_k = (k as f64).log2();
-
-        let mut best_dist = f64::INFINITY;
-        let mut best_fft: Option<f64> = None;
-        let mut best_direct: Option<f64> = None;
-
-        for (i, &ks) in KS.iter().enumerate() {
-            for (j, &ms) in MS.iter().enumerate() {
-                if fft_table[i][j].is_none() && direct_table[i][j].is_none() {
-                    continue;
-                }
-                let d = (log_k - (ks as f64).log2()).powi(2) + (log_n - (ms as f64).log2()).powi(2);
-                if d < best_dist {
-                    best_dist = d;
-                    best_fft = fft_table[i][j];
-                    best_direct = direct_table[i][j];
-                }
-            }
-        }
-
-        let choose_fft = if let Some(fft_t) = best_fft {
-            match best_direct {
-                Some(direct_t) => {
-                    fft_t > direct_t
-                }
-                None => {
-                    true
-                }
-            }
-        } else {
-            let kernel_size = kernel.rows * kernel.cols;
-            let matrix_size = self.rows * self.cols;
-            kernel_size > 32 || matrix_size > 512*512
-        };
-
-        if choose_fft {
+        if prefers_fft(self.rows, self.cols, kernel.rows, kernel.cols) {
             match mode {
                 PaddingMode::Valid => self.conv_fft(kernel),
                 PaddingMode::Zero(_, _) => self.conv_zero_fft(kernel),
@@ -157,11 +65,46 @@ impl<T: Float> Matrix<T> {
             match mode {
                 PaddingMode::Valid => self.conv(kernel),
                 PaddingMode::Zero(_, _) => self.conv_zero(kernel),
-                PaddingMode::Mirror(_, _) => self.conv_with_mirror_padding(kernel)
+                PaddingMode::Mirror(_, _) => self.conv_with_mirror_padding(kernel),
             }
         }
-
     }
+}
+
+/// Reports whether the FFT path should beat the direct one for these sizes.
+///
+/// # Example
+/// ```
+/// use tensorrs::linalg::prefers_fft;
+///
+/// // a tiny kernel over a small image: the direct loop wins easily
+/// assert!(!prefers_fft(64, 64, 3, 3));
+/// // a large kernel is what the FFT is for
+/// assert!(prefers_fft(256, 256, 64, 64));
+/// ```
+///
+/// # Arguments
+/// * `input_rows`, `input_cols` — the size of the input.
+/// * `kernel_rows`, `kernel_cols` — the size of the kernel.
+///
+/// # Notes
+/// The direct path does `output_cells * kernel_cells` multiply-adds, the FFT path
+/// two transforms of the input rounded up to a power of two. Comparing the two
+/// makes the rule independent of the machine it was measured on, unlike a table
+/// of absolute timings; only one constant, the cost of a butterfly relative to a
+/// multiply-add, carries any hardware assumption.
+///
+/// The rule picks the faster path on every size in `generate_conv_decision_table`,
+/// covering kernels from `3x3` to `128x128` over inputs from `64x64` to
+/// `1024x1024`. [Tensor::conv](crate::linalg::Tensor::conv) applies the same rule
+/// at any rank.
+pub fn prefers_fft(
+    input_rows: usize,
+    input_cols: usize,
+    kernel_rows: usize,
+    kernel_cols: usize,
+) -> bool {
+    crate::linalg::fft::prefers_fft_nd(&[input_rows, input_cols], &[kernel_rows, kernel_cols])
 }
 
 fn fft_convolution_2d<T: Float + Copy>(
@@ -171,36 +114,80 @@ fn fft_convolution_2d<T: Float + Copy>(
     output_cols: usize,
     padding: PaddingMode,
 ) -> Matrix<T> {
-    let fft_rows = (input.rows + kernel.rows - 1).next_power_of_two();
-    let fft_cols = (input.cols + kernel.cols - 1).next_power_of_two();
+    // The size of the circular convolution. Normally input + kernel - 1 is
+    // needed so that the wrap-around cannot spoil the result. But Valid takes
+    // only those outputs whose window lies wholly inside the input: with a
+    // centred kernel the extracted region [(k-1)/2 .. L-k+(k-1)/2] touches
+    // exactly the indices 0..L-1, so the wrap-around never reaches it. The size
+    // of the input itself is therefore enough here - and that is precisely four
+    // times less work whenever the side of the input is already a power of two.
+    let (fft_rows, fft_cols) = match padding {
+        PaddingMode::Valid => (
+            input.rows.next_power_of_two(),
+            input.cols.next_power_of_two(),
+        ),
+        _ => (
+            (input.rows + kernel.rows - 1).next_power_of_two(),
+            (input.cols + kernel.cols - 1).next_power_of_two(),
+        ),
+    };
 
-    let mut input_buf = prepare_input(input, fft_rows, fft_cols, &padding);
-    let mut kernel_buf = prepare_kernel(kernel, fft_rows, fft_cols);
+    // The input and the kernel are both real, so they fit into a single complex
+    // field: re = input, img = kernel. One forward transform instead of two -
+    // the spectra are separated afterwards by Hermitian symmetry.
+    let mut input_buf = prepare_packed(input, kernel, fft_rows, fft_cols, &padding);
 
-    // forward 2D FFT (parallelized over rows and columns)
-    fft_2d(&mut input_buf, fft_rows, fft_cols, false);
-    fft_2d(&mut kernel_buf, fft_rows, fft_cols, false);
+    // both transforms share these, so they are built once
+    let shape = [fft_rows, fft_cols];
+    let twiddles: Vec<Twiddles<T>> = twiddles_for(&shape);
+    let mut scratch = vec![Complex::zero(); fft_rows * fft_cols];
 
-    // pointwise multiply (parallel)
-    input_buf.par_iter_mut()
-        .zip(kernel_buf.par_iter())
-        .for_each(|(a, b)| *a = *a * *b);
+    // forward transform of the packed field
+    fft_nd(&mut input_buf, &mut scratch, &shape, &twiddles, false);
 
-    // inverse 2D FFT (parallelized)
-    fft_2d(&mut input_buf, fft_rows, fft_cols, true);
+    // split the two spectra apart and multiply them in one pass
+    let mut input_buf = split_and_multiply(&input_buf, &shape);
 
-    extract_result(&input_buf, fft_cols, output_rows, output_cols, &padding, fft_rows, fft_cols)
+    // and back
+    fft_nd(&mut input_buf, &mut scratch, &shape, &twiddles, true);
+
+    // prepare_kernel lays the mirrored kernel down shifted by -k/2, so the
+    // wanted result of the circular convolution sits in the buffer at an offset
+    // of (k-1)/2 rather than in the corner. For odd kernels that coincides with
+    // k/2, for even ones it differs by one - which is exactly where the direct
+    // and the FFT path used to diverge.
+    let start_row = kernel.rows.saturating_sub(1) / 2;
+    let start_col = kernel.cols.saturating_sub(1) / 2;
+
+    extract_result(&input_buf, fft_cols, output_rows, output_cols, start_row, start_col, fft_rows, fft_cols)
 }
 
-// Подготовка входа: T -> Complex<T>
+/// Packs the input into the real part and the kernel into the imaginary one.
+fn prepare_packed<T: Float + Copy>(
+    input: &Matrix<T>,
+    kernel: &Matrix<T>,
+    fft_rows: usize,
+    fft_cols: usize,
+    padding: &PaddingMode,
+) -> Vec<Complex<T>> {
+    let mut buffer = prepare_input(input, fft_rows, fft_cols, padding);
+    let kernel_buf = prepare_kernel(kernel, fft_rows, fft_cols);
+
+    for (slot, k) in buffer.iter_mut().zip(kernel_buf.iter()) {
+        slot.img = k.re;
+    }
+
+    buffer
+}
+
+// Preparing the input: T -> Complex<T>
 fn prepare_input<T: Float + Copy>(
     input: &Matrix<T>,
     fft_rows: usize,
     fft_cols: usize,
     padding: &PaddingMode,
 ) -> Vec<Complex<T>> {
-    let zero = T::default();
-    let mut buffer = vec![Complex::new(zero, zero); fft_rows * fft_cols];
+    let mut buffer = vec![Complex::zero(); fft_rows * fft_cols];
 
     match padding {
         PaddingMode::Valid => {
@@ -257,8 +244,7 @@ fn prepare_kernel<T: Float + Copy>(
     fft_rows: usize,
     fft_cols: usize,
 ) -> Vec<Complex<T>> {
-    let zero = T::default();
-    let mut buffer = vec![Complex::new(zero, zero); fft_rows * fft_cols];
+    let mut buffer = vec![Complex::zero(); fft_rows * fft_cols];
 
     let pad_rows = kernel.rows / 2;
     let pad_cols = kernel.cols / 2;
@@ -276,90 +262,14 @@ fn prepare_kernel<T: Float + Copy>(
     buffer
 }
 
-fn fft_2d<T: Float + Copy>(
-    buffer: &mut [Complex<T>],
-    rows: usize,
-    cols: usize,
-    inverse: bool,
-) {
-    buffer.par_chunks_mut(cols).for_each(|slice| {
-        fft_1d_inplace(slice, inverse);
-    });
-
-    // 2) FFT по столбцам — параллельно вычисляем каждый столбец и собираем результаты
-    // cols_results[c] будет Vec<Complex<T>> длины rows — результат для столбца c
-    let cols_results: Vec<Vec<Complex<T>>> = (0..cols).into_par_iter().map(|c| {
-        // собрать столбец в локальный буфер
-        let mut col_buffer = vec![Complex::new(T::default(), T::default()); rows];
-        for r in 0..rows {
-            col_buffer[r] = buffer[r * cols + c];
-        }
-        // выполнить FFT для столбца (локально)
-        fft_1d_inplace(&mut col_buffer, inverse);
-        col_buffer
-    }).collect();
-
-    // 3) Копируем результаты обратно в buffer (последовательно — безопасно и быстро по сравнению с FFT)
-    for c in 0..cols {
-        for r in 0..rows {
-            buffer[r * cols + c] = cols_results[c][r];
-        }
-    }
-}
-
-fn fft_1d_inplace<T: Float + Copy>(buf: &mut [Complex<T>], inverse: bool) {
-    let n = buf.len();
-    assert!(n.is_power_of_two(), "FFT length must be power of two, got {}", n);
-    // bit-reversal permutation
-    let mut j = 0usize;
-    for i in 1..n {
-        let mut bit = n >> 1;
-        while j & bit != 0 {
-            j ^= bit;
-            bit >>= 1;
-        }
-        j ^= bit;
-        if i < j {
-            buf.swap(i, j);
-        }
-    }
-
-    // main loops
-    let mut len = 2;
-    let pi = T::pi();
-    while len <= n {
-        let len_t = T::from_usize(len);
-        let two = T::from_usize(2);
-        let angle = if inverse {
-            two * pi / len_t
-        } else {
-            -two * pi / len_t
-        };
-        let wlen = Complex::expi(angle);
-        for i in (0..n).step_by(len) {
-            let mut w = Complex::new(T::one(), T::default());
-            let half = len / 2;
-            for j in 0..half {
-                let u = buf[i + j];
-                let v = buf[i + j + half] * w;
-                buf[i + j] = u + v;
-                buf[i + j + half] = u - v;
-                w = w * wlen;
-            }
-        }
-        len <<= 1;
-    }
-
-    // NOTE: scaling (1/N) is done outside (in extract_result),
-    // so we do not scale here.
-}
 
 fn extract_result<T: Float + Copy>(
     buffer: &[Complex<T>],
     stride: usize,
     output_rows: usize,
     output_cols: usize,
-    padding: &PaddingMode,
+    start_row: usize,
+    start_col: usize,
     fft_rows: usize,
     fft_cols: usize,
 ) -> Matrix<T> {
@@ -367,17 +277,13 @@ fn extract_result<T: Float + Copy>(
     let scale = T::one() / T::from_usize(denom);
     let mut result_data = vec![T::default(); output_rows * output_cols];
 
-    let (start_row, start_col) = match padding {
-        PaddingMode::Valid => (0, 0),
-        PaddingMode::Zero(pad_rows, pad_cols) => (*pad_rows, *pad_cols),
-        PaddingMode::Mirror(pad_rows, pad_cols) => (*pad_rows, *pad_cols),
-    };
+    let buffer_rows = buffer.len() / stride;
 
     for i in 0..output_rows {
         for j in 0..output_cols {
             let buf_row = start_row + i;
             let buf_col = start_col + j;
-            if buf_row < buffer.len() / stride && buf_col < stride {
+            if buf_row < buffer_rows && buf_col < stride {
                 let idx = buf_row * stride + buf_col;
                 let value = buffer[idx].re * scale;
                 result_data[i * output_cols + j] = value;
@@ -394,86 +300,146 @@ mod tests {
     //use std::time::Instant;
 
     use crate::linalg::Matrix;
+    
     #[test]
-    fn generate_conv_decision_table() {
-        println!("{:^10} | {:^12} | {:^10} | {:^10} | {:^10} | {:^10}", 
-                "Kernel", "Matrix", "FFT(ms)", "Direct(ms)", "Smart(ms)", "Chosen");
-        println!("{:-<75}", "");
+    fn fft_path_agrees_with_the_direct_one() {
+        use crate::linalg::PaddingMode;
 
-        // Test different size combinations
-        let sizes = [
-            // Small kernels
-            (3, 64),
-            (3, 128),
-            (3, 256),
-            (3, 512),
-            (3, 1024),
-            
-            // Medium kernels
-            (16, 64),
-            (16, 128),
-            (16, 256),
-            (16, 512),
-            (16, 1024),
-            
-            // Large kernels
-            (64, 64),
-            (64, 128),
-            (64, 256),
-            (64, 512),
-            (64, 1024),
-            
-            (128, 128),
-            (128, 256),
-            (128, 512),
-            (128, 1024),
-        ];
+        fn grid(r: usize, c: usize) -> Matrix<f64> {
+            Matrix::new((0..r * c).map(|i| (i + 1) as f64).collect(), r, c)
+        }
+        /// Relative difference: these grids reach ~1e6, so an absolute bound
+        /// would be measuring the magnitude of the data rather than the error.
+        fn max_diff(a: &Matrix<f64>, b: &Matrix<f64>) -> f64 {
+            let (a, b) = (a.get_data(), b.get_data());
+            let scale = a
+                .iter()
+                .fold(1.0f64, |m, v| if v.abs() > m { v.abs() } else { m });
 
-        for (kernel_size, matrix_size) in sizes.iter() {
-            compare_methods_with_smart(*kernel_size, *matrix_size);
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).abs() / scale)
+                .fold(0.0f64, |m, v| if v > m { v } else { m })
+        }
+
+        // both parities of the kernel: the centering shift in prepare_kernel is
+        // k / 2, but the result sits at (k - 1) / 2, which only differ for even k
+        for (ir, ic, kr, kc) in [
+            (5, 5, 3, 3),
+            (9, 7, 5, 3),
+            (8, 8, 4, 4),
+            (16, 16, 2, 2),
+            (10, 10, 6, 4),
+            (7, 7, 1, 1),
+            // powers of two: Valid takes the reduced FFT size here
+            (8, 8, 3, 3),
+            (16, 8, 5, 5),
+            (32, 32, 7, 7),
+            // a kernel nearly as wide as the input leaves almost no valid region
+            (8, 8, 7, 7),
+            (9, 9, 8, 8),
+            (4, 4, 4, 4),
+            // one row or column
+            (1, 16, 1, 3),
+            (16, 1, 3, 1),
+        ] {
+            let img = grid(ir, ic);
+            let kernel = grid(kr, kc);
+
+            // a few ulps of an f64 FFT, with room for the accumulation over a
+            // transform of this size
+            let tol = 1e-10;
+
+            assert!(max_diff(&img.conv(&kernel), &img.conv_fft(&kernel)) < tol,
+                "Valid disagrees for a {ir}x{ic} input and a {kr}x{kc} kernel");
+            assert!(max_diff(&img.conv_zero(&kernel), &img.conv_zero_fft(&kernel)) < tol,
+                "Zero disagrees for a {ir}x{ic} input and a {kr}x{kc} kernel");
+            assert!(max_diff(&img.conv_with_mirror_padding(&kernel),
+                             &img.conv_with_mirror_padding_fft(&kernel)) < tol,
+                "Mirror disagrees for a {ir}x{ic} input and a {kr}x{kc} kernel");
+
+            // smart_conv picks a path on its own, so it has to match either way
+            assert!(max_diff(&img.conv(&kernel),
+                             &img.smart_conv(&kernel, PaddingMode::Valid)) < tol,
+                "smart_conv disagrees for a {ir}x{ic} input and a {kr}x{kc} kernel");
         }
     }
 
-    fn compare_methods_with_smart(kernel_size: usize, matrix_size: usize) {
-        let a: Matrix<f32> = Matrix::randn(matrix_size, matrix_size);
-        let b: Matrix<f32> = Matrix::randn(kernel_size, kernel_size);
-        
-        // Time FFT convolution
-        let fft_start = std::time::Instant::now();
-        let _fft_result = a.conv_fft(&b);
-        let fft_time = fft_start.elapsed().as_millis();
-        
-        // Time direct convolution (only if matrix is not too large)
-        let direct_time = if matrix_size <= 512 {
-            let direct_start = std::time::Instant::now();
-            let _direct_result = a.conv(&b);
-            direct_start.elapsed().as_millis()
-        } else {
-            u128::MAX
-        };
-
-        // Time smart convolution
-        let smart_start = std::time::Instant::now();
-        let _smart_result = a.smart_conv(&b, crate::linalg::matrix::conv::PaddingMode::Zero(kernel_size/2, kernel_size/2));
-        let smart_time = smart_start.elapsed().as_millis();
-
-        // Determine which method smart chose
-        let chosen = if smart_time == fft_time {
-            "FFT"
-        } else if smart_time == direct_time {
-            "Direct"
-        } else {
-            "Smart" // если smart сам что-то смешанное делает (на всякий случай)
-        };
-
-        println!("{:^10} | {:^12} | {:^10} | {:^10} | {:^10} | {:^10}", 
-                kernel_size, 
-                format!("{}x{}", matrix_size, matrix_size),
-                fft_time,
-                if direct_time == u128::MAX { "N/A".to_string() } else { direct_time.to_string() },
-                smart_time,
-                chosen
-        );
+    #[test]
+    fn pi_is_accurate_enough_for_an_f64_fft() {
+        use crate::Float;
+        // a truncated pi poisons every twiddle factor
+        assert!((f64::pi() - std::f64::consts::PI).abs() < 1e-15);
+        assert!((f32::pi() - std::f32::consts::PI).abs() < 1e-7);
     }
 
+    #[test]
+    fn fft_path_agrees_with_the_direct_one_in_f32() {
+        let img: Matrix<f32> = Matrix::new((0..64).map(|i| ((i % 7) as f32) * 0.25).collect(), 8, 8);
+        let kernel: Matrix<f32> = Matrix::new(
+            vec![0.5, -1.0, 0.25, 2.0, 0.0, -0.5, 1.0, 0.75, -0.25],
+            3,
+            3,
+        );
+
+        let direct = img.conv(&kernel).get_data();
+        let fft = img.conv_fft(&kernel).get_data();
+
+        for (d, f) in direct.iter().zip(fft.iter()) {
+            assert!((d - f).abs() < 1e-3, "f32 paths disagree: {d} vs {f}");
+        }
+    }
+
+    #[test]
+    #[ignore = "benchmark: run with `cargo test --release -- --ignored --nocapture`"]
+    fn generate_conv_decision_table() {
+        use super::prefers_fft;
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        /// Best of `runs`, after one warm-up call. A single measurement catches
+        /// the first-touch page faults and the rayon pool spinning up.
+        fn best_ms(mut f: impl FnMut(), runs: usize) -> f64 {
+            f();
+            let mut best = f64::MAX;
+            for _ in 0..runs {
+                let start = Instant::now();
+                f();
+                let ms = start.elapsed().as_secs_f64() * 1000.0;
+                if ms < best {
+                    best = ms;
+                }
+            }
+            best
+        }
+
+        println!("{:^8} | {:^11} | {:^10} | {:^10} | {:^7} | {:^8} | {:^7}",
+                 "Kernel", "Matrix", "FFT(ms)", "Direct(ms)", "FFT/Dir", "prefers", "right?");
+        println!("{:-<75}", "");
+
+        let sizes = [
+            (3, 64), (3, 128), (3, 256), (3, 512), (3, 1024),
+            (16, 64), (16, 128), (16, 256), (16, 512), (16, 1024),
+            (64, 64), (64, 128), (64, 256), (64, 512), (64, 1024),
+            (128, 128), (128, 256), (128, 512), (128, 1024),
+        ];
+
+        for (k, n) in sizes {
+            let a: Matrix<f32> = Matrix::randn(n, n);
+            let b: Matrix<f32> = Matrix::randn(k, k);
+
+            // both paths measured on the same mode, otherwise the FFT sizes differ
+            let runs = if n >= 1024 { 3 } else { 5 };
+            let fft = best_ms(|| { black_box(a.conv_fft(&b)); }, runs);
+            let direct = best_ms(|| { black_box(a.conv(&b)); }, runs);
+
+            let chose_fft = prefers_fft(n, n, k, k);
+            let correct = chose_fft == (fft < direct);
+
+            println!("{:^8} | {:^11} | {:^10.2} | {:^10.2} | {:^7.2} | {:^8} | {:^7}",
+                     k, format!("{n}x{n}"), fft, direct, fft / direct,
+                     if chose_fft { "FFT" } else { "direct" },
+                     if correct { "yes" } else { "NO" });
+        }
+    }
 }

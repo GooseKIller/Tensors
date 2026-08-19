@@ -641,7 +641,7 @@ impl<T: Float> Matrix<T> {
     /// }
     /// ```
     pub fn try_norm(&self, p: T) -> Result<T, String>{
-        // Проверка, что p >= 1
+        // Check that p >= 1
         if p < T::one() {
             return Err(format!(
                 "!!!Number p must be >= 1!!! Got: {}",
@@ -649,11 +649,11 @@ impl<T: Float> Matrix<T> {
             ));
         }
 
-        // Специальная обработка для p = 1 (максимальная сумма по столбцам)
+        // Special handling for p = 1 (the largest column sum)
         if p == T::one() {
             let mut max_num = match self.try_get_col(0) {
                 Ok(col) => col.abs_sum(),
-                Err(_) => T::default(), // Если матрица пустая
+                Err(_) => T::default(), // when the matrix is empty
             };
 
             for i in 1..self.cols {
@@ -667,7 +667,7 @@ impl<T: Float> Matrix<T> {
             return Ok(max_num);
         }
 
-        // Специальная обработка для p = 2 (норма Фробениуса)
+        // Special handling for p = 2 (the Frobenius norm)
         if p == T::from(2) {
             let mut sum_of_squares = T::default();
             for x in &self.data {
@@ -676,7 +676,7 @@ impl<T: Float> Matrix<T> {
             return Ok(sum_of_squares.sqrt());
         }
 
-        // Общий случай для p > 1, p ≠ 2
+        // The general case for p > 1, p != 2
         let mut norm = T::default();
         for i in &self.data {
             norm += i.powf(p);
@@ -722,7 +722,7 @@ impl<T: Float> Matrix<T> {
             let (q, r) = a.qr();
             a = r * &q;
 
-            // проверка сходимости
+            // the convergence check
             let mut off_diag_norm = T::default();
             for i in 0..n {
                 for j in 0..i {

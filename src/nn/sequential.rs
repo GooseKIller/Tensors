@@ -128,6 +128,20 @@ impl<T: Float> Module<T> for Sequential<T> {
         }
         params
     }
+
+    /// Switches every layer into training mode.
+    fn train(&mut self) {
+        for layer in &mut self.layers {
+            layer.train();
+        }
+    }
+
+    /// Switches every layer into inference mode.
+    fn eval(&mut self) {
+        for layer in &mut self.layers {
+            layer.eval();
+        }
+    }
 }
 
 #[cfg(test)]

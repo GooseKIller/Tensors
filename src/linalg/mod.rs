@@ -10,6 +10,7 @@
 //!
 //! 3.[Tensor] (not finished) - A multi-dimensional array for generalizing vectors and matrices to higher dimensions.
 
+pub(crate) mod fft;
 mod matrix;
 mod tensor;
 mod vector;

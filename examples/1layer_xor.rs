@@ -29,7 +29,7 @@ fn main() {
         optim.step();
     }
     for (i, param) in model.parameters().iter().enumerate() {
-        println!("Параметр {}: {}", i, param);
+        println!("Parameter {}: {}", i, param);
     }
 
     println!("Final results: {}", model.forward(&x));
